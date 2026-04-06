@@ -17,6 +17,8 @@ def _pynput_key_to_id(key: keyboard.Key) -> str:
         "ctrl": "ctrl_l",
         "return": "enter",
         "cmd_l": "cmd",
+        "menu": "apps",
+        "pause_break": "pause",
     }
     return aliases.get(name, name)
 
