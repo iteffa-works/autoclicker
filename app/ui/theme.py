@@ -2,25 +2,34 @@
 
 from __future__ import annotations
 
-import base64
-
 from app.models.settings import ThemeMode
 from app.ui import design_tokens as T
 
+# PNG 18×18 — Qt QSS на Windows не показує галочку з data:image/svg+xml у QCheckBox::indicator.
+_CHK_INDICATOR_DARK = (
+    "iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAAW0lEQVR4nGNgGAWDGzT2/PiPLsZEriGNaIaRbBAM1JdwMDKQCxp7fvzH5i2cLsKmuBGHATgNwhYGjUhsXF7CMAhZIbor6vGEC04JUgzBG2sUxQo20EggkEcAAABpnC0qJ534dQAAAABJRU5ErkJggg=="
+)
+_CHK_INDICATOR_LIGHT = (
+    "iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAAW0lEQVR4nGNgGAWDGySnffyPLsZEriHJaIaRbBAMzJ3Fz8hALkhO+/gfm7dwugib4mQcBuA0CFsYJCOxcXkJwyBkheiumIsnXHBKkGII3lijKFawgWQCgTwCAACvMysd+RSXlAAAAABJRU5ErkJggg=="
+)
+# QSpinBox/QComboBox: border-трикутники (width:0) на Windows часто стають квадратами — PNG у image:.
+_SPIN_UP_DARK = "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAICAYAAADN5B7xAAAAL0lEQVR4nGNgGDAwZfGO/9jEmfApxqYJQwO6InQ+VhvwARQNuNyNLA7XgEsxujwAGf4aaYb1sjsAAAAASUVORK5CYII="
+_SPIN_DOWN_DARK = "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAICAYAAADN5B7xAAAAOUlEQVR4nGNgIBEwwhhTFu/4T0hxTqwHIxMyh5BiBgYGBrgGfJqQxVE0EAMwNKDbQsipcEBMIBAFAPzrDWSBzvGzAAAAAElFTkSuQmCC"
+_SPIN_UP_LIGHT = "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAICAYAAADN5B7xAAAAL0lEQVR4nGNgGDCQUtL9H5s4Ez7F2DRhaEBXhM7HagM+gKIBl7uRxeEacClGlwcAdcYVfaJFF3sAAAAASUVORK5CYII="
+_SPIN_DOWN_LIGHT = "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAICAYAAADN5B7xAAAAOUlEQVR4nGNgIBEwwhgpJd3/CSme01PKyITMIaSYgYGBAa4BnyZkcRQNxAAMDei2EHIqHBATCEQBAFsXECDnr5qNAAAAAElFTkSuQmCC"
 
-def _svg_check_data_url(stroke: str) -> str:
-    svg = (
-        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">'
-        f'<path fill="none" stroke="{stroke}" stroke-width="2.2" stroke-linecap="round" '
-        f'stroke-linejoin="round" d="M3.5 8.2l2.8 2.8 6.2-7.5"/></svg>'
-    )
-    b = base64.b64encode(svg.encode("utf-8")).decode("ascii")
-    return f"data:image/svg+xml;base64,{b}"
+
+def _check_indicator_data_url(png_b64: str) -> str:
+    return f"data:image/png;base64,{png_b64}"
 
 
 def stylesheet_for(theme: ThemeMode) -> str:
-    chk_d = _svg_check_data_url(T.D_ACCENT_HOVER)
-    chk_l = _svg_check_data_url(T.L_ACCENT)
+    chk_d = _check_indicator_data_url(_CHK_INDICATOR_DARK)
+    chk_l = _check_indicator_data_url(_CHK_INDICATOR_LIGHT)
+    spin_u_d = _check_indicator_data_url(_SPIN_UP_DARK)
+    spin_d_d = _check_indicator_data_url(_SPIN_DOWN_DARK)
+    spin_u_l = _check_indicator_data_url(_SPIN_UP_LIGHT)
+    spin_d_l = _check_indicator_data_url(_SPIN_DOWN_LIGHT)
     if theme == ThemeMode.DARK:
         bg = T.D_BG_APP
         surf = T.D_BG_SURFACE
@@ -51,7 +60,7 @@ def stylesheet_for(theme: ThemeMode) -> str:
             border: none;
             border-radius: 6px;
             icon-size: 16px;
-            padding: 6px 10px 8px 10px;
+            padding: 6px 6px 8px 6px;
             margin: 0px 1px;
             font-size: 11px;
             font-weight: 500;
@@ -65,7 +74,19 @@ def stylesheet_for(theme: ThemeMode) -> str:
             background: rgba(99,102,241,0.15);
             color: {tp};
             border-bottom: 3px solid {ac};
-            padding: 6px 10px 5px 10px;
+            padding: 6px 6px 5px 6px;
+        }}
+        QPushButton#headerActionButton {{
+            padding: 4px 8px 5px 6px;
+            font-size: 11px;
+            font-weight: 500;
+            border-radius: 8px;
+            icon-size: 16px;
+        }}
+        QPushButton#acStart, QPushButton#acPause, QPushButton#acStop {{
+            padding: 4px 8px 5px 6px;
+            font-size: 11px;
+            icon-size: 16px;
         }}
         QLabel#headerTitle {{ color: {tp}; font-size: 15px; font-weight: 600; }}
         QWidget#appFooter {{
@@ -208,6 +229,22 @@ def stylesheet_for(theme: ThemeMode) -> str:
             font-weight: 500;
             padding: 4px 4px 4px 0;
         }}
+        QLabel#settingsFieldLabel {{
+            color: {ts};
+            font-size: 10px;
+            font-weight: 600;
+            padding: 1px 4px;
+            background: rgba(15,23,42,0.45);
+            border: 1px solid {b};
+            border-radius: 4px;
+        }}
+        QLabel#settingsSectionTitle {{
+            color: {tp};
+            font-size: 12px;
+            font-weight: 600;
+            margin: 0;
+            padding: 0;
+        }}
         QStackedWidget#mainStack {{
             border: none;
             background: transparent;
@@ -248,11 +285,9 @@ def stylesheet_for(theme: ThemeMode) -> str:
             background: #334155;
         }}
         QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{
-            width: 0;
-            height: 0;
-            border-left: 4px solid transparent;
-            border-right: 4px solid transparent;
-            border-bottom: 6px solid #94A3B8;
+            image: url({spin_u_d});
+            width: 12px;
+            height: 8px;
             margin-right: 8px;
             margin-bottom: 2px;
         }}
@@ -268,11 +303,9 @@ def stylesheet_for(theme: ThemeMode) -> str:
             background: #334155;
         }}
         QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{
-            width: 0;
-            height: 0;
-            border-left: 4px solid transparent;
-            border-right: 4px solid transparent;
-            border-top: 6px solid #94A3B8;
+            image: url({spin_d_d});
+            width: 12px;
+            height: 8px;
             margin-right: 8px;
             margin-top: 2px;
         }}
@@ -297,11 +330,9 @@ def stylesheet_for(theme: ThemeMode) -> str:
             background: #334155;
         }}
         QComboBox::down-arrow {{
-            width: 0;
-            height: 0;
-            border-left: 5px solid transparent;
-            border-right: 5px solid transparent;
-            border-top: 6px solid #94A3B8;
+            image: url({spin_d_d});
+            width: 12px;
+            height: 8px;
             margin-right: 10px;
         }}
         QComboBox QAbstractItemView {{
@@ -424,6 +455,45 @@ def stylesheet_for(theme: ThemeMode) -> str:
             image: url({chk_d});
         }}
         QCheckBox:disabled {{ color: {td}; }}
+        QWidget#settingsTabRoot QCheckBox {{ spacing: 6px; }}
+        QWidget#settingsTabRoot QLineEdit,
+        QWidget#settingsTabRoot QSpinBox,
+        QWidget#settingsTabRoot QDoubleSpinBox,
+        QWidget#settingsTabRoot QComboBox {{
+            min-height: 24px;
+            border-radius: 6px;
+        }}
+        QWidget#settingsTabRoot QLineEdit {{
+            padding: 0 4px;
+        }}
+        QWidget#settingsTabRoot QSpinBox,
+        QWidget#settingsTabRoot QDoubleSpinBox {{
+            padding: 4px 8px;
+            padding-right: 26px;
+        }}
+        QWidget#settingsTabRoot QComboBox {{
+            padding: 4px 8px;
+            padding-right: 26px;
+        }}
+        QWidget#settingsTabRoot QComboBox::drop-down {{
+            width: 26px;
+        }}
+        QWidget#settingsTabRoot QSpinBox::up-button, QWidget#settingsTabRoot QDoubleSpinBox::up-button {{
+            width: 22px;
+        }}
+        QWidget#settingsTabRoot QSpinBox::down-button, QWidget#settingsTabRoot QDoubleSpinBox::down-button {{
+            width: 22px;
+        }}
+        QWidget#settingsTabRoot QPushButton {{
+            padding: 5px 10px;
+            margin: 0px;
+            min-height: 16px;
+            border-radius: 6px;
+        }}
+        QWidget#settingsTabRoot QLabel#formInlineLabel {{
+            font-size: 11px;
+            padding: 0px 4px 0px 0px;
+        }}
         """
     # Light
     bg = T.L_BG_APP
@@ -455,7 +525,7 @@ def stylesheet_for(theme: ThemeMode) -> str:
             border: none;
             border-radius: 6px;
             icon-size: 16px;
-            padding: 6px 10px 8px 10px;
+            padding: 6px 6px 8px 6px;
             margin: 0px 1px;
             font-size: 11px;
             font-weight: 500;
@@ -469,7 +539,19 @@ def stylesheet_for(theme: ThemeMode) -> str:
             background: {sel_bg};
             color: {ac};
             border-bottom: 3px solid {ac};
-            padding: 6px 10px 5px 10px;
+            padding: 6px 6px 5px 6px;
+        }}
+        QPushButton#headerActionButton {{
+            padding: 4px 8px 5px 6px;
+            font-size: 11px;
+            font-weight: 500;
+            border-radius: 8px;
+            icon-size: 16px;
+        }}
+        QPushButton#acStart, QPushButton#acPause, QPushButton#acStop {{
+            padding: 4px 8px 5px 6px;
+            font-size: 11px;
+            icon-size: 16px;
         }}
         QLabel#headerTitle {{ color: {tp}; font-size: 15px; font-weight: 600; }}
         QWidget#appFooter {{
@@ -611,6 +693,22 @@ def stylesheet_for(theme: ThemeMode) -> str:
             font-weight: 500;
             padding: 4px 4px 4px 0;
         }}
+        QLabel#settingsFieldLabel {{
+            color: {ts};
+            font-size: 10px;
+            font-weight: 600;
+            padding: 1px 4px;
+            background: {surf2};
+            border: 1px solid {b};
+            border-radius: 4px;
+        }}
+        QLabel#settingsSectionTitle {{
+            color: {tp};
+            font-size: 12px;
+            font-weight: 600;
+            margin: 0;
+            padding: 0;
+        }}
         QStackedWidget#mainStack {{
             border: none;
             background: transparent;
@@ -651,11 +749,9 @@ def stylesheet_for(theme: ThemeMode) -> str:
             background: #E2E8F0;
         }}
         QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{
-            width: 0;
-            height: 0;
-            border-left: 4px solid transparent;
-            border-right: 4px solid transparent;
-            border-bottom: 6px solid #64748B;
+            image: url({spin_u_l});
+            width: 12px;
+            height: 8px;
             margin-right: 8px;
             margin-bottom: 2px;
         }}
@@ -671,11 +767,9 @@ def stylesheet_for(theme: ThemeMode) -> str:
             background: #E2E8F0;
         }}
         QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{
-            width: 0;
-            height: 0;
-            border-left: 4px solid transparent;
-            border-right: 4px solid transparent;
-            border-top: 6px solid #64748B;
+            image: url({spin_d_l});
+            width: 12px;
+            height: 8px;
             margin-right: 8px;
             margin-top: 2px;
         }}
@@ -700,11 +794,9 @@ def stylesheet_for(theme: ThemeMode) -> str:
             background: #E2E8F0;
         }}
         QComboBox::down-arrow {{
-            width: 0;
-            height: 0;
-            border-left: 5px solid transparent;
-            border-right: 5px solid transparent;
-            border-top: 6px solid #64748B;
+            image: url({spin_d_l});
+            width: 12px;
+            height: 8px;
             margin-right: 10px;
         }}
         QComboBox QAbstractItemView {{
@@ -826,40 +918,174 @@ def stylesheet_for(theme: ThemeMode) -> str:
             border: 1px solid {ac};
             image: url({chk_l});
         }}
+        QWidget#settingsTabRoot QCheckBox {{ spacing: 6px; }}
+        QWidget#settingsTabRoot QLineEdit,
+        QWidget#settingsTabRoot QSpinBox,
+        QWidget#settingsTabRoot QDoubleSpinBox,
+        QWidget#settingsTabRoot QComboBox {{
+            min-height: 24px;
+            border-radius: 6px;
+        }}
+        QWidget#settingsTabRoot QLineEdit {{
+            padding: 0 4px;
+        }}
+        QWidget#settingsTabRoot QSpinBox,
+        QWidget#settingsTabRoot QDoubleSpinBox {{
+            padding: 4px 8px;
+            padding-right: 26px;
+        }}
+        QWidget#settingsTabRoot QComboBox {{
+            padding: 4px 8px;
+            padding-right: 26px;
+        }}
+        QWidget#settingsTabRoot QComboBox::drop-down {{
+            width: 26px;
+        }}
+        QWidget#settingsTabRoot QSpinBox::up-button, QWidget#settingsTabRoot QDoubleSpinBox::up-button {{
+            width: 22px;
+        }}
+        QWidget#settingsTabRoot QSpinBox::down-button, QWidget#settingsTabRoot QDoubleSpinBox::down-button {{
+            width: 22px;
+        }}
+        QWidget#settingsTabRoot QPushButton {{
+            padding: 5px 10px;
+            margin: 0px;
+            min-height: 16px;
+            border-radius: 6px;
+        }}
+        QWidget#settingsTabRoot QLabel#formInlineLabel {{
+            font-size: 11px;
+            padding: 0px 4px 0px 0px;
+        }}
         """
 
 
 def keyboard_styles(theme: ThemeMode) -> tuple[str, str]:
-    """idle, active key QLabel#kbdKey stylesheets."""
+    """Щільні клавіші на єдиній темній підкладці."""
     if theme == ThemeMode.DARK:
-        b, bg = T.D_BORDER_SUBTLE, T.D_BG_SURFACE2
-        tc = T.D_TEXT_SECONDARY
+        face = "#18181b"
+        edge_t, edge_b = "#3f3f46", "#09090b"
+        tc = "#fafafa"
         idle = (
-            f"QLabel#kbdKey {{ border: 1px solid {b}; border-radius: 6px; background: {bg}; "
-            f"min-width: 28px; min-height: 32px; color: {tc}; font-size: 11px; }}"
+            f"QLabel#kbdKey {{ border: none; border-radius: 4px; color: {tc}; font-size: 8px; font-weight: 500; "
+            f"background: {face}; "
+            f"border-top: 1px solid {edge_t}; border-left: 1px solid {edge_t}; "
+            f"border-right: 1px solid {edge_b}; border-bottom: 1px solid #000; "
+            f"min-width: 0px; min-height: 22px; padding: 1px 2px; }}"
         )
         active = (
-            f"QLabel#kbdKey {{ border: 2px solid {T.D_ACCENT}; border-radius: 6px; background: rgba(99,102,241,0.15); "
-            f"color: {T.D_ACCENT_HOVER}; min-width: 28px; min-height: 32px; font-weight: 600; }}"
+            f"QLabel#kbdKey {{ border: none; border-radius: 4px; color: {T.D_ACCENT_HOVER}; font-size: 8px; font-weight: 600; "
+            f"background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #27272a, stop:1 #18181b); "
+            f"border-top: 1px solid {T.D_ACCENT}; border-left: 1px solid {T.D_ACCENT}; "
+            f"border-right: 1px solid #312e81; border-bottom: 1px solid #1e1b4b; "
+            f"min-width: 0px; min-height: 22px; padding: 1px 2px; }}"
         )
         return idle, active
-    b, bg = T.L_BORDER_SUBTLE, T.L_BG_SURFACE
+    hi, lo = "#FFFFFF", "#E2E8F0"
+    edge_t, edge_b = "#FFFFFF", "#94A3B8"
     tc = T.L_TEXT_SECONDARY
     idle = (
-        f"QLabel#kbdKey {{ border: 1px solid {b}; border-radius: 6px; background: {bg}; "
-        f"min-width: 28px; min-height: 32px; color: {tc}; font-size: 11px; }}"
+        f"QLabel#kbdKey {{ border: none; border-radius: 4px; color: {tc}; font-size: 8px; font-weight: 500; "
+        f"background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 {hi}, stop:1 {lo}); "
+        f"border-top: 1px solid {edge_t}; border-left: 1px solid {edge_t}; "
+        f"border-right: 1px solid #CBD5E1; border-bottom: 1px solid {edge_b}; "
+        f"min-width: 0px; min-height: 22px; padding: 1px 2px; }}"
     )
     active = (
-        f"QLabel#kbdKey {{ border: 2px solid {T.L_ACCENT}; border-radius: 6px; background: {T.L_SELECTION_BG}; "
-        f"color: {T.L_ACCENT_ACTIVE}; min-width: 28px; min-height: 32px; font-weight: 600; }}"
+        f"QLabel#kbdKey {{ border: none; border-radius: 4px; color: {T.L_ACCENT_ACTIVE}; font-size: 8px; font-weight: 600; "
+        f"background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #EEF2FF, stop:1 #C7D2FE); "
+        f"border-top: 1px solid {T.L_ACCENT}; border-left: 1px solid {T.L_ACCENT}; "
+        f"border-right: 1px solid #A5B4FC; border-bottom: 1px solid #6366F1; "
+        f"min-width: 0px; min-height: 22px; padding: 1px 2px; }}"
     )
     return idle, active
 
 
-def keyboard_frame_style(theme: ThemeMode) -> str:
-    """Рамка навколо візуальної клавіатури."""
+def keyboard_fn_key_style(theme: ThemeMode) -> str:
+    """Клавіша Fn — синій текст."""
     if theme == ThemeMode.DARK:
-        b, bg = T.D_BORDER_SUBTLE, T.D_BG_ELEVATED
-        return f"QWidget#keyboardVisual {{ border: 1px solid {b}; border-radius: 12px; background: {bg}; }}"
-    b, bg = T.L_BORDER_SUBTLE, T.L_BG_SURFACE2
-    return f"QWidget#keyboardVisual {{ border: 1px solid {b}; border-radius: 12px; background: {bg}; }}"
+        face = "#18181b"
+        return (
+            f"QLabel#kbdKeyFn {{ border: none; border-radius: 4px; color: #5886a6; font-size: 8px; font-weight: 600; "
+            f"background: {face}; "
+            f"border-top: 1px solid #3f3f46; border-left: 1px solid #3f3f46; "
+            f"border-right: 1px solid #09090b; border-bottom: 1px solid #000; "
+            f"min-width: 0px; min-height: 22px; padding: 1px 2px; }}"
+        )
+    return (
+        f"QLabel#kbdKeyFn {{ border: none; border-radius: 4px; color: #2563EB; font-size: 8px; font-weight: 600; "
+        f"background: #F8FAFC; border-top: 1px solid #fff; border-left: 1px solid #fff; "
+        f"border-right: 1px solid #CBD5E1; border-bottom: 1px solid #94A3B8; "
+        f"min-width: 0px; min-height: 22px; padding: 1px 2px; }}"
+    )
+
+
+def mouse_test_card_style(theme: ThemeMode) -> str:
+    """Компактна картка «Миша»."""
+    if theme == ThemeMode.DARK:
+        return (
+            f"QFrame#mouseTestCard {{ background: {T.D_BG_SURFACE}; border: 1px solid {T.D_BORDER_SUBTLE}; "
+            f"border-radius: 10px; }}"
+            f"QLabel#mouseTestTitle {{ color: {T.D_TEXT_PRIMARY}; font-size: 12px; font-weight: 600; }}"
+            f"QLabel#mouseTestCoords {{ color: {T.D_ACCENT_HOVER}; font-size: 14px; font-weight: 600; "
+            f"font-family: 'Cascadia Mono', 'Consolas', 'Courier New', monospace; padding: 2px 0 6px 0; }}"
+            f"QLabel#mouseTestLbl {{ color: {T.D_TEXT_SECONDARY}; font-size: 10px; min-width: 36px; }}"
+            f"QLabel#mouseTestScroll {{ color: {T.D_TEXT_PRIMARY}; font-size: 10px; }}"
+        )
+    return (
+        f"QFrame#mouseTestCard {{ background: {T.L_BG_SURFACE}; border: 1px solid {T.L_BORDER_SUBTLE}; "
+        f"border-radius: 10px; }}"
+        f"QLabel#mouseTestTitle {{ color: {T.L_TEXT_PRIMARY}; font-size: 12px; font-weight: 600; }}"
+        f"QLabel#mouseTestCoords {{ color: {T.L_ACCENT_ACTIVE}; font-size: 14px; font-weight: 600; "
+        f"font-family: 'Cascadia Mono', 'Consolas', 'Courier New', monospace; padding: 2px 0 6px 0; }}"
+        f"QLabel#mouseTestLbl {{ color: {T.L_TEXT_SECONDARY}; font-size: 10px; min-width: 36px; }}"
+        f"QLabel#mouseTestScroll {{ color: {T.L_TEXT_PRIMARY}; font-size: 10px; }}"
+    )
+
+
+def mouse_test_pill_style(theme: ThemeMode, down: bool) -> str:
+    """Стиль «пігулки» стану кнопки миші."""
+    if theme == ThemeMode.DARK:
+        if down:
+            return (
+                f"QLabel#mouseTestPill {{ border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 600; "
+                f"background: rgba(99,102,241,0.22); color: {T.D_ACCENT_HOVER}; border: 1px solid {T.D_ACCENT}; }}"
+            )
+        return (
+            f"QLabel#mouseTestPill {{ border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 500; "
+            f"background: {T.D_BG_SURFACE2}; color: {T.D_TEXT_SECONDARY}; border: 1px solid {T.D_BORDER_SUBTLE}; }}"
+        )
+    if down:
+        return (
+            f"QLabel#mouseTestPill {{ border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 600; "
+            f"background: {T.L_SELECTION_BG}; color: {T.L_ACCENT_ACTIVE}; border: 1px solid {T.L_ACCENT}; }}"
+        )
+    return (
+        f"QLabel#mouseTestPill {{ border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 500; "
+        f"background: {T.L_BG_SURFACE2}; color: {T.L_TEXT_SECONDARY}; border: 1px solid {T.L_BORDER_SUBTLE}; }}"
+    )
+
+
+def keyboard_frame_style(theme: ThemeMode) -> str:
+    """Єдиний блок клавіатури + numpad без «сірої плями»."""
+    if theme == ThemeMode.DARK:
+        plate = "#27272a"
+        b = "#3f3f46"
+        tc = T.D_TEXT_SECONDARY
+        return (
+            f"QWidget#keyboardVisual {{ border: 1px solid {b}; border-radius: 8px; background: {plate}; "
+            f"padding: 0px; }} "
+            f"QGroupBox#kbdNumpadGroup {{ color: {tc}; font-size: 8px; font-weight: 600; border: none; "
+            f"border-left: 1px solid {b}; border-radius: 0px; margin-top: 0px; padding-top: 4px; padding-left: 4px; "
+            f"background: transparent; }}"
+            f"QGroupBox#kbdNumpadGroup::title {{ subcontrol-origin: margin; left: 2px; padding: 0 4px; color: {tc}; }}"
+        )
+    b = T.L_BORDER_SUBTLE
+    plate, tc = "#f1f5f9", T.L_TEXT_SECONDARY
+    return (
+        f"QWidget#keyboardVisual {{ border: 1px solid {b}; border-radius: 8px; background: {plate}; padding: 0px; }} "
+        f"QGroupBox#kbdNumpadGroup {{ color: {tc}; font-size: 8px; font-weight: 600; border: none; "
+        f"border-left: 1px solid {b}; border-radius: 0px; margin-top: 0px; padding-top: 4px; padding-left: 4px; "
+        f"background: transparent; }}"
+        f"QGroupBox#kbdNumpadGroup::title {{ subcontrol-origin: margin; left: 2px; padding: 0 4px; color: {tc}; }}"
+    )
