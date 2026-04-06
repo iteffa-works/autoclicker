@@ -33,6 +33,7 @@ _VK_LETTERS: dict[int, str] = {
 }
 
 VK_TO_KEY_ID: dict[int, str] = {
+    0x1B: "escape",
     0xC0: "`",
     0x31: "1",
     0x32: "2",
@@ -68,10 +69,21 @@ VK_TO_KEY_ID: dict[int, str] = {
     0xA5: "alt_r",
     0x5B: "cmd",
     0x5C: "cmd_r",
+    0x5D: "apps",
     0x25: "left",
     0x26: "up",
     0x27: "right",
     0x28: "down",
+    0x2D: "insert",
+    0x24: "home",
+    0x21: "page_up",
+    0x2E: "delete",
+    0x23: "end",
+    0x22: "page_down",
+    0x2C: "print_screen",
+    0x91: "scroll_lock",
+    0x13: "pause",
+    0x90: "num_lock",
     0x60: "numpad0",
     0x61: "numpad1",
     0x62: "numpad2",
@@ -83,6 +95,10 @@ VK_TO_KEY_ID: dict[int, str] = {
     0x68: "numpad8",
     0x69: "numpad9",
     0x6E: "decimal",
+    0x6F: "numpad_divide",
+    0x6A: "numpad_multiply",
+    0x6D: "numpad_subtract",
+    0x6B: "numpad_add",
 }
 VK_TO_KEY_ID.update(_VK_LETTERS)
 
@@ -92,7 +108,6 @@ for _fi in range(12):
 # key_id → VK (для ToUnicode / підписів); без 0x10 (дублікат shift)
 KEY_ID_TO_VK: dict[str, int] = {v: k for k, v in VK_TO_KEY_ID.items() if k != 0x10}
 
-# Лише клавіші, де підпис залежить від розкладки (не модифікатори / F-ряд тощо)
 _FIXED_LABEL_KEYS = frozenset(
     {
         "shift",
@@ -103,6 +118,7 @@ _FIXED_LABEL_KEYS = frozenset(
         "alt_r",
         "cmd",
         "cmd_r",
+        "apps",
         "tab",
         "caps_lock",
         "enter",
@@ -112,6 +128,21 @@ _FIXED_LABEL_KEYS = frozenset(
         "up",
         "right",
         "down",
+        "escape",
+        "insert",
+        "home",
+        "page_up",
+        "delete",
+        "end",
+        "page_down",
+        "print_screen",
+        "scroll_lock",
+        "pause",
+        "num_lock",
+        "numpad_divide",
+        "numpad_multiply",
+        "numpad_subtract",
+        "numpad_add",
     }
     | {f"f{i}" for i in range(1, 13)}
 )
