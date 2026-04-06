@@ -94,6 +94,9 @@ from app.utils.json_io import read_json, write_json
 from app.utils.paths import assets_dir, macros_dir
 from pynput.mouse import Controller as MouseController
 
+# QSS не задає gap між іконкою та підписом у QPushButton — тонкий пробіл (було 3× en — забагато).
+_ICON_TEXT_GAP = "\u2009"
+
 _NAV_TITLES = (
     "Автоклікер",
     "Макроси",
@@ -184,6 +187,8 @@ class MainWindow(QMainWindow):
         self._btn_stop.clicked.connect(self._ac_stop)
         self._btn_reset.clicked.connect(self._ac_reset)
         self._btn_save_xy.clicked.connect(self._ac_save_xy)
+        for _b in (self._btn_start, self._btn_pause, self._btn_stop):
+            _b.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
         self._register_icon_widget(self._btn_start, "action_play", "toolbar")
         self._register_icon_widget(self._btn_pause, "action_pause", "toolbar")
         self._register_icon_widget(self._btn_stop, "action_stop", "toolbar")
@@ -205,12 +210,79 @@ class MainWindow(QMainWindow):
             elif isinstance(w, QLabel):
                 w.setPixmap(ic.pixmap(qsz))
 
+    def _create_header_actions_stack(self) -> QStackedWidget:
+        """Права зона хедера: залежить від активної вкладки (див. _on_nav_changed)."""
+        st = QStackedWidget()
+        st.setObjectName("headerActionsStack")
+
+        w_ac = QWidget()
+        la = QHBoxLayout(w_ac)
+        la.setContentsMargins(0, 0, 0, 0)
+        la.setSpacing(4)
+        la.addWidget(self._btn_start)
+        la.addWidget(self._btn_pause)
+        la.addWidget(self._btn_stop)
+        st.addWidget(w_ac)
+
+        w_macro = QWidget()
+        lm = QHBoxLayout(w_macro)
+        lm.setContentsMargins(0, 0, 0, 0)
+        lm.setSpacing(4)
+        self._btn_macro_play = QPushButton(_ICON_TEXT_GAP + "Відтворити")
+        self._btn_macro_rec = QPushButton(_ICON_TEXT_GAP + "Запис")
+        self._btn_macro_stop_play = QPushButton(_ICON_TEXT_GAP + "Стоп відтворення")
+        for _mb in (self._btn_macro_play, self._btn_macro_rec, self._btn_macro_stop_play):
+            _mb.setObjectName("headerActionButton")
+            _mb.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+        self._btn_macro_play.clicked.connect(self._macro_play)
+        self._btn_macro_rec.clicked.connect(self._macro_start_rec)
+        self._btn_macro_stop_play.clicked.connect(self._macro_stop_play)
+        self._register_icon_widget(self._btn_macro_play, "macro_play", "toolbar")
+        self._register_icon_widget(self._btn_macro_rec, "macro_record", "toolbar")
+        self._register_icon_widget(self._btn_macro_stop_play, "macro_stop_play", "toolbar")
+        lm.addWidget(self._btn_macro_play)
+        lm.addWidget(self._btn_macro_rec)
+        lm.addWidget(self._btn_macro_stop_play)
+        st.addWidget(w_macro)
+
+        st.addWidget(QWidget())
+
+        w_set = QWidget()
+        ls = QHBoxLayout(w_set)
+        ls.setContentsMargins(0, 0, 0, 0)
+        self._btn_save_settings = QPushButton(_ICON_TEXT_GAP + "Зберегти налаштування")
+        self._btn_save_settings.setObjectName("headerActionButton")
+        self._btn_save_settings.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+        self._btn_save_settings.clicked.connect(self._save_settings_ui)
+        self._register_icon_widget(self._btn_save_settings, "action_save", "toolbar")
+        ls.addWidget(self._btn_save_settings, 0, Qt.AlignmentFlag.AlignRight)
+        st.addWidget(w_set)
+
+        st.addWidget(QWidget())
+        st.setCurrentIndex(0)
+        return st
+
     def _build_ui(self) -> None:
         central = QWidget()
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
+
+        self._log_edit = QTextEdit()
+        self._log_edit.setReadOnly(True)
+        self._log_edit.setObjectName("eventLog")
+        self._log_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+        self._stack = QStackedWidget()
+        self._stack.setObjectName("mainStack")
+        self._stack.addWidget(self._build_autoclick_tab())
+        self._stack.addWidget(self._build_macro_tab())
+        self._stack.addWidget(self._build_kb_tab())
+        self._stack.addWidget(self._build_settings_tab())
+        self._stack.addWidget(self._build_logs_tab())
+
+        self._header_actions_stack = self._create_header_actions_stack()
 
         header = QWidget()
         header.setObjectName("headerBar")
@@ -220,11 +292,11 @@ class MainWindow(QMainWindow):
         nav_wrap = QWidget()
         nav_lay = QHBoxLayout(nav_wrap)
         nav_lay.setContentsMargins(0, 0, 0, 0)
-        nav_lay.setSpacing(6)
+        nav_lay.setSpacing(4)
         self._nav_group = QButtonGroup(self)
         self._nav_group.setExclusive(True)
         for i, title in enumerate(_NAV_TITLES):
-            nb = QPushButton(title)
+            nb = QPushButton(_ICON_TEXT_GAP + title)
             nb.setObjectName("headerNavButton")
             nb.setCheckable(True)
             self._nav_group.addButton(nb, i)
@@ -234,9 +306,7 @@ class MainWindow(QMainWindow):
         self._nav_group.idClicked.connect(self._on_nav_id_clicked)
         head_lay.addWidget(nav_wrap, 0)
         head_lay.addStretch(1)
-        head_lay.addWidget(self._btn_start)
-        head_lay.addWidget(self._btn_pause)
-        head_lay.addWidget(self._btn_stop)
+        head_lay.addWidget(self._header_actions_stack, 0)
         root.addWidget(header)
 
         body = QHBoxLayout()
@@ -342,19 +412,6 @@ class MainWindow(QMainWindow):
             _bl.addWidget(w)
         side_col.addWidget(_brand, 1)
 
-        self._log_edit = QTextEdit()
-        self._log_edit.setReadOnly(True)
-        self._log_edit.setObjectName("eventLog")
-        self._log_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-
-        self._stack = QStackedWidget()
-        self._stack.setObjectName("mainStack")
-        self._stack.addWidget(self._build_autoclick_tab())
-        self._stack.addWidget(self._build_macro_tab())
-        self._stack.addWidget(self._build_kb_tab())
-        self._stack.addWidget(self._build_settings_tab())
-        self._stack.addWidget(self._build_logs_tab())
-
         scroll_inner = QWidget()
         sil = QVBoxLayout(scroll_inner)
         sil.setContentsMargins(CONTENT_PADDING, CONTENT_PADDING, CONTENT_PADDING, CONTENT_PADDING)
@@ -439,7 +496,7 @@ class MainWindow(QMainWindow):
 
     def _bind_row_label(self, text: str) -> QLabel:
         lb = QLabel(text)
-        lb.setObjectName("formFieldLabel")
+        lb.setObjectName("settingsFieldLabel")
         lb.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         lb.setMinimumWidth(BINDS_LABEL_MIN_W)
         lb.setMaximumWidth(BINDS_LABEL_MIN_W + 80)
@@ -465,9 +522,9 @@ class MainWindow(QMainWindow):
 
     def _settings_lbl(self, text: str) -> QLabel:
         lb = QLabel(text)
-        lb.setObjectName("formFieldLabel")
+        lb.setObjectName("settingsFieldLabel")
         lb.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        lb.setFixedWidth(200)
+        lb.setFixedWidth(176)
         lb.setWordWrap(True)
         return lb
 
@@ -519,7 +576,6 @@ class MainWindow(QMainWindow):
         self._ac_cps.setValue(5)
         self._ac_use_interval = QCheckBox("Використовувати інтервал (мс), інакше CPS")
         self._ac_use_interval.setChecked(True)
-        self._ac_use_interval.setWordWrap(True)
         self._ac_jitter = QDoubleSpinBox()
         self._ac_jitter.setRange(0, 5000)
         self._ac_jitter.setValue(5)
@@ -740,11 +796,12 @@ class MainWindow(QMainWindow):
         def suf(ch: HotkeyChord | None) -> str:
             return f" ({ch.display_string()})" if ch else ""
 
-        self._btn_start.setText("Старт" + suf(b.toggle_autoclick))
-        self._btn_pause.setText("Пауза" + suf(b.pause_autoclick))
-        self._btn_stop.setText("Стоп" + suf(b.toggle_autoclick))
-        self._btn_reset.setText("Скидання")
-        self._btn_save_xy.setText("Зберегти позицію курсора")
+        g = _ICON_TEXT_GAP
+        self._btn_start.setText(g + "Старт" + suf(b.toggle_autoclick))
+        self._btn_pause.setText(g + "Пауза" + suf(b.pause_autoclick))
+        self._btn_stop.setText(g + "Стоп" + suf(b.toggle_autoclick))
+        self._btn_reset.setText(g + "Скидання")
+        self._btn_save_xy.setText(g + "Зберегти позицію курсора")
 
     def _load_ac_mode_ui(self) -> None:
         s = self._settings
@@ -1388,9 +1445,9 @@ class MainWindow(QMainWindow):
         lay = QFormLayout(w)
         lay.setLabelAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         lay.setFormAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-        lay.setHorizontalSpacing(12)
-        lay.setVerticalSpacing(10)
-        lay.setContentsMargins(0, 2, 0, 0)
+        lay.setHorizontalSpacing(8)
+        lay.setVerticalSpacing(6)
+        lay.setContentsMargins(0, 0, 0, 0)
         self._bind_fields: dict[str, QLineEdit] = {}
         names = [
             ("toggle_autoclick", "Перемикач автоклікера"),
@@ -1402,13 +1459,13 @@ class MainWindow(QMainWindow):
         ]
         for key, title in names:
             row = QHBoxLayout()
-            row.setSpacing(8)
+            row.setSpacing(6)
             le = QLineEdit()
             le.setReadOnly(True)
             b_listen = QPushButton("Слухати")
             b_clear = QPushButton("Очистити")
-            b_listen.setMinimumWidth(108)
-            b_clear.setMinimumWidth(100)
+            b_listen.setMinimumWidth(96)
+            b_clear.setMinimumWidth(88)
             b_listen.clicked.connect(lambda checked=False, k=key: self._bind_listen(k))
             b_clear.clicked.connect(lambda checked=False, k=key: self._bind_clear(k))
             self._register_icon_widget(b_listen, "action_listen", "toolbar")
@@ -1506,14 +1563,15 @@ class MainWindow(QMainWindow):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         inner = QWidget()
+        inner.setObjectName("settingsTabRoot")
         vl = QVBoxLayout(inner)
-        vl.setSpacing(16)
-        vl.setContentsMargins(0, 2, 8, 0)
+        vl.setSpacing(8)
+        vl.setContentsMargins(0, 0, 4, 0)
 
         settings_block = QWidget()
         grid = QGridLayout(settings_block)
-        grid.setHorizontalSpacing(12)
-        grid.setVerticalSpacing(10)
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(5)
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setColumnStretch(1, 1)
 
@@ -1575,7 +1633,7 @@ class MainWindow(QMainWindow):
 
         ch_wrap = QWidget()
         ch_l = QVBoxLayout(ch_wrap)
-        ch_l.setSpacing(4)
+        ch_l.setSpacing(2)
         ch_l.setContentsMargins(0, 0, 0, 0)
         for cx in (self._set_top, self._set_sound, self._set_tray, self._set_close_tray):
             ch_l.addWidget(cx)
@@ -1608,7 +1666,7 @@ class MainWindow(QMainWindow):
         as_row = QWidget()
         as_h = QHBoxLayout(as_row)
         as_h.setContentsMargins(0, 0, 0, 0)
-        as_h.setSpacing(12)
+        as_h.setSpacing(8)
         as_h.addWidget(self._set_autosave)
         il_as = QLabel("Інтервал (с)")
         il_as.setObjectName("formInlineLabel")
@@ -1657,11 +1715,6 @@ class MainWindow(QMainWindow):
         grid.addWidget(self._set_jitter, r, 1)
         r += 1
 
-        btn = QPushButton("Зберегти налаштування")
-        btn.clicked.connect(self._save_settings_ui)
-        self._register_icon_widget(btn, "action_save", "toolbar")
-        grid.addWidget(btn, r, 0, 1, 2)
-
         self._field_max_width(self._set_theme, FORM_COMBO_MAX_W)
         self._field_max_width(self._set_hk_backend, FORM_COMBO_MAX_W)
         self._field_max_width(self._set_overlay_op, FORM_FIELD_MAX_W)
@@ -1676,7 +1729,7 @@ class MainWindow(QMainWindow):
         div.setFixedHeight(1)
         vl.addWidget(div)
         binds_head = QLabel("Гарячі клавіші (бинди)")
-        binds_head.setObjectName("sectionTitle")
+        binds_head.setObjectName("settingsSectionTitle")
         vl.addWidget(binds_head)
         vl.addWidget(self._build_binds_section())
         scroll.setWidget(inner)
@@ -1706,6 +1759,8 @@ class MainWindow(QMainWindow):
         self._apply_theme()
         if hasattr(self, "_kb_panel"):
             self._kb_panel.set_theme(self._settings.theme)
+        if hasattr(self, "_mouse_panel"):
+            self._mouse_panel.set_theme(self._settings.theme)
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, self._settings.always_on_top)
         self._apply_no_maximize_button()
         self.show()
@@ -1740,10 +1795,12 @@ class MainWindow(QMainWindow):
     def _build_kb_tab(self) -> QWidget:
         w = QWidget()
         lay = QHBoxLayout(w)
+        lay.setSpacing(10)
+        lay.setContentsMargins(0, 0, 0, 0)
         self._kb_panel = KeyboardTestPanel(self._settings.theme)
-        self._mouse_panel = MouseTestPanel()
-        lay.addWidget(self._kb_panel, 2)
-        lay.addWidget(self._mouse_panel, 1)
+        self._mouse_panel = MouseTestPanel(self._settings.theme)
+        lay.addWidget(self._kb_panel, 5)
+        lay.addWidget(self._mouse_panel, 2)
         return w
 
     def _on_nav_id_clicked(self, idx: int) -> None:
@@ -1753,6 +1810,8 @@ class MainWindow(QMainWindow):
     def _on_nav_changed(self, idx: int) -> None:
         if idx < 0:
             return
+        if hasattr(self, "_header_actions_stack"):
+            self._header_actions_stack.setCurrentIndex(idx)
         if idx == _NAV_INDEX_KEYBOARD_TEST:
             self._kb_hooks.start()
             self._kb_panel.set_layout_tracking(True)
@@ -1782,6 +1841,8 @@ class MainWindow(QMainWindow):
         self._refresh_ui_icons()
         if hasattr(self, "_kb_panel"):
             self._kb_panel.set_theme(self._settings.theme)
+        if hasattr(self, "_mouse_panel"):
+            self._mouse_panel.set_theme(self._settings.theme)
 
     def _is_busy(self) -> bool:
         if self._macro_engine.get_state() == AppRunState.PLAYING_MACRO:
