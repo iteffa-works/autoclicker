@@ -1,4 +1,4 @@
-"""Візуальна клавіатура тесту: сітка 16×col, капи KeyCapWidget, NumPad окремою карточкою."""
+"""Візуальна клавіатура тесту: сітка 16×col, KeyCapWidget; main + numpad — одна пластина."""
 
 from __future__ import annotations
 
@@ -59,18 +59,28 @@ class KeyCapWidget(QFrame):
         self._styles: KeyboardKeycapStyles | None = None
         self._is_active = False
         self._hover = False
-        self.setFixedSize(width_px, height_px)
+        self.setMinimumSize(width_px, height_px)
         self.setMouseTracking(True)
-        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
 
         self._lbl = QLabel(text)
         self._lbl.setObjectName("keyCapLabel")
-        self._lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._lbl.setAlignment(
+            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
+        )
         self._lbl.setWordWrap(True)
+        self._lbl.setMinimumWidth(0)
+        self._lbl.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Preferred,
+        )
         self._lbl.setMouseTracking(True)
 
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(8, 6, 8, 6)
+        lay.setContentsMargins(6, 5, 6, 5)
         lay.addWidget(self._lbl, 0, Qt.AlignmentFlag.AlignCenter)
 
         self._opacity = QGraphicsOpacityEffect(self)
@@ -155,7 +165,7 @@ class KeyboardTestPanel(QWidget):
 
     COLS = 16
     NUM_COLS = 4
-    _HIST_MAX = 12
+    _HIST_MAX = 32
 
     def __init__(self, theme: ThemeMode) -> None:
         super().__init__()
@@ -171,20 +181,29 @@ class KeyboardTestPanel(QWidget):
 
         self._hist_deque: deque[str] = deque(maxlen=self._HIST_MAX)
 
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+
         root = QVBoxLayout(self)
         root.setSpacing(DT.S16)
         root.setContentsMargins(0, 0, 0, 0)
 
         hist_row = QHBoxLayout()
+        hist_row.setContentsMargins(DT.S12, 0, DT.S12, 0)
         hist_row.setSpacing(DT.S8)
         self._hist_check = QCheckBox("Історія натискань")
         self._hist_check.setToolTip("Показувати останні натискання клавіш")
         hist_row.addWidget(self._hist_check)
         self._hist_chips_host = QWidget()
+        self._hist_chips_host.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Preferred,
+        )
         self._hist_chips_layout = QHBoxLayout(self._hist_chips_host)
         self._hist_chips_layout.setContentsMargins(0, 0, 0, 0)
         self._hist_chips_layout.setSpacing(6)
-        self._hist_chips_layout.addStretch(1)
+        self._hist_chips_layout.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
         hist_row.addWidget(self._hist_chips_host, 1)
         root.addLayout(hist_row)
 
@@ -194,21 +213,29 @@ class KeyboardTestPanel(QWidget):
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        scroll.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
 
         self._wrap = QWidget()
         self._wrap.setObjectName("keyboardVisual")
+        self._wrap.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         inner = QVBoxLayout(self._wrap)
         inner.setSpacing(DT.S16)
-        inner.setContentsMargins(DT.S8, DT.S8, DT.S8, DT.S8)
+        inner.setContentsMargins(DT.S12, DT.S16, DT.S12, DT.S16)
+        inner.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        main_holder = QWidget()
-        main_grid = QGridLayout(main_holder)
+        main_keyboard_wrap = QWidget()
+        main_keyboard_wrap.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Preferred,
+        )
+        main_grid = QGridLayout(main_keyboard_wrap)
         main_grid.setHorizontalSpacing(DT.KB_TEST_GRID_GAP)
         main_grid.setVerticalSpacing(DT.KB_TEST_GRID_GAP)
         main_grid.setContentsMargins(0, 0, 0, 0)
         for c in range(self.COLS):
             main_grid.setColumnMinimumWidth(c, DT.KB_TEST_KEY_UNIT_W)
-            main_grid.setColumnStretch(c, 0)
+            main_grid.setColumnStretch(c, 1)
 
         r = 0
         c = 0
@@ -307,16 +334,16 @@ class KeyboardTestPanel(QWidget):
 
         r += 1
         c = 0
-        self._gadd_deco(main_grid, r, c, 1, 2, "Fn", fn_blue=True)
-        c += 2
+        self._gadd_deco(main_grid, r, c, 1, 1, "Fn", fn_blue=True)
+        c += 1
         self._gadd(main_grid, r, c, 1, 1, "Ctrl", "ctrl_l")
         c += 1
         self._gadd(main_grid, r, c, 1, 1, "Win", "cmd")
         c += 1
         self._gadd(main_grid, r, c, 1, 1, "Alt", "alt")
         c += 1
-        self._gadd(main_grid, r, c, 1, 4, "Space", "space")
-        c += 4
+        self._gadd(main_grid, r, c, 1, 5, "Space", "space")
+        c += 5
         self._gadd(main_grid, r, c, 1, 1, "Alt", "alt_r")
         c += 1
         self._gadd(main_grid, r, c, 1, 1, "Win", "cmd_r")
@@ -331,22 +358,33 @@ class KeyboardTestPanel(QWidget):
         c += 1
         self._gadd(main_grid, r, c, 1, 1, "▶", "right")
 
-        inner.addWidget(main_holder, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        main_holder = QWidget()
+        main_holder.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Preferred,
+        )
+        mh_row = QHBoxLayout(main_holder)
+        mh_row.setContentsMargins(0, 0, 0, 0)
+        mh_row.setSpacing(0)
+        mh_row.addWidget(main_keyboard_wrap, 1, Qt.AlignmentFlag.AlignTop)
 
-        num_card = QFrame()
-        num_card.setObjectName("kbdNumpadCard")
-        num_lay = QVBoxLayout(num_card)
-        num_lay.setContentsMargins(DT.S16, DT.S16, DT.S16, DT.S16)
-        num_lay.setSpacing(DT.S8)
-        nt = QLabel("Numpad")
-        nt.setObjectName("kbdNumpadTitle")
-        num_lay.addWidget(nt)
+        row_kb = QHBoxLayout()
+        row_kb.setSpacing(DT.KB_TEST_MAIN_NUM_GAP)
+        row_kb.setContentsMargins(0, 0, 0, 0)
+        row_kb.setAlignment(Qt.AlignmentFlag.AlignTop)
+        row_kb.addWidget(main_holder, 1, Qt.AlignmentFlag.AlignTop)
+        num_pad = QWidget()
+        num_pad.setObjectName("kbdNumpadSection")
+        num_pad.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
+        num_lay = QVBoxLayout(num_pad)
+        num_lay.setContentsMargins(0, 0, 0, 0)
+        num_lay.setSpacing(0)
         ngrid = QGridLayout()
         ngrid.setHorizontalSpacing(DT.KB_TEST_GRID_GAP)
         ngrid.setVerticalSpacing(DT.KB_TEST_GRID_GAP)
         for c in range(self.NUM_COLS):
             ngrid.setColumnMinimumWidth(c, DT.KB_TEST_KEY_UNIT_W)
-            ngrid.setColumnStretch(c, 0)
+            ngrid.setColumnStretch(c, 1)
 
         ngrid.addWidget(self._make_key_cap("Num\nLock", "num_lock", 1, 1), 0, 0)
         ngrid.addWidget(self._make_key_cap("/", "numpad_divide", 1, 1), 0, 1)
@@ -371,10 +409,11 @@ class KeyboardTestPanel(QWidget):
         ngrid.addWidget(self._make_key_cap(".\nDel", "decimal", 1, 1), 4, 2)
 
         num_lay.addLayout(ngrid)
-        inner.addWidget(num_card, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        row_kb.addWidget(num_pad, 0, Qt.AlignmentFlag.AlignTop)
+        inner.addLayout(row_kb)
 
         scroll.setWidget(self._wrap)
-        root.addWidget(scroll, 1)
+        root.addWidget(scroll, 0)
 
         self.setStyleSheet(keyboard_frame_style(theme))
         self._apply_styles_to_caps()
@@ -524,8 +563,11 @@ class KeyboardTestPanel(QWidget):
         for kid in self._hist_deque:
             lab = QLabel(kid)
             lab.setObjectName("kbHistChip")
+            lab.setSizePolicy(
+                QSizePolicy.Policy.Preferred,
+                QSizePolicy.Policy.Preferred,
+            )
             self._hist_chips_layout.addWidget(lab)
-        self._hist_chips_layout.addStretch(1)
 
 
 class MouseTestPanel(QWidget):
@@ -533,6 +575,8 @@ class MouseTestPanel(QWidget):
         super().__init__()
         self._theme = theme
         self._down = {"left": False, "right": False, "middle": False}
+
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -620,7 +664,6 @@ class MouseTestPanel(QWidget):
         root.addWidget(card_mouse)
         root.addWidget(card_xy)
         root.addWidget(card_sc)
-        root.addStretch(1)
 
         self.set_theme(theme)
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 # Spacing (px) — 8px grid
 S8 = 8
+S12 = 12
 S16 = 16
 S24 = 24
 S32 = 32
@@ -29,19 +30,24 @@ BINDS_LABEL_MIN_W = 190
 # Кнопки стовпчика «Макроси» — однакова ширина
 MACRO_SIDE_BTN_MIN_W = 128
 
-# Вкладка «Тест клавіатури» (окремий акцент blue-500 для клавіш)
-KB_TEST_KEY_UNIT_W = 44
-KB_TEST_KEY_H = 44
+# Вкладка «Тест клавіатури» (клавіші трохи світліші за plate — «преміум» панель)
+KB_TEST_KEY_UNIT_W = 54
+KB_TEST_KEY_H = 50
 KB_TEST_GRID_GAP = 6
+KB_TEST_MAIN_NUM_GAP = 16  # відстань main | numpad
 KB_TEST_ACCENT = "#3B82F6"
 KB_TEST_ACCENT_SOFT = "rgba(59,130,246,0.35)"
-KB_TEST_KEY_FACE = "#1F2937"
-KB_TEST_KEY_FACE_HOVER = "#273549"
-KB_TEST_PLATE = "#1E293B"
+KB_TEST_KEY_FACE = "#283548"
+KB_TEST_KEY_FACE_HOVER = "#34455a"
+KB_TEST_KEY_FACE_ACTIVE = "#1e2d3f"
+KB_TEST_KEY_BORDER = "#3d4d64"
+KB_TEST_PLATE = "#151d2e"
 KB_TEST_PLATE_OUTER = "#0F172A"
 
-L_KB_TEST_KEY_FACE = "#F8FAFC"
-L_KB_TEST_KEY_FACE_HOVER = "#F1F5F9"
+L_KB_TEST_KEY_FACE = "#F1F5F9"
+L_KB_TEST_KEY_FACE_HOVER = "#E8EEF4"
+L_KB_TEST_KEY_FACE_ACTIVE = "#DCE4EE"
+L_KB_TEST_KEY_BORDER = "#CBD5E1"
 L_KB_TEST_PLATE = "#FFFFFF"
 L_KB_TEST_PLATE_OUTER = "#F1F5F9"
 L_KB_TEST_ACCENT = "#2563EB"

@@ -241,6 +241,7 @@ class MainWindow(QMainWindow):
         la = QHBoxLayout(w_ac)
         la.setContentsMargins(0, 0, 0, 0)
         la.setSpacing(4)
+        la.addStretch(1)
         la.addWidget(self._btn_start)
         la.addWidget(self._btn_pause)
         la.addWidget(self._btn_stop)
@@ -270,6 +271,7 @@ class MainWindow(QMainWindow):
         self._register_icon_widget(self._btn_macro_rec, "macro_record", "toolbar")
         self._register_icon_widget(self._btn_macro_stop_rec, "macro_stop_rec", "toolbar")
         self._register_icon_widget(self._btn_macro_stop_play, "macro_stop_play", "toolbar")
+        lm.addStretch(1)
         lm.addWidget(self._btn_macro_play)
         lm.addWidget(self._btn_macro_rec)
         lm.addWidget(self._btn_macro_stop_rec)
@@ -1825,13 +1827,14 @@ class MainWindow(QMainWindow):
 
     def _build_kb_tab(self) -> QWidget:
         w = QWidget()
-        lay = QHBoxLayout(w)
+        lay = QVBoxLayout(w)
         lay.setSpacing(10)
         lay.setContentsMargins(0, 0, 0, 0)
         self._kb_panel = KeyboardTestPanel(self._settings.theme)
         self._mouse_panel = MouseTestPanel(self._settings.theme)
-        lay.addWidget(self._kb_panel, 7)
-        lay.addWidget(self._mouse_panel, 3)
+        lay.addWidget(self._kb_panel, 0)
+        lay.addWidget(self._mouse_panel, 0)
+        lay.addStretch(1)
         return w
 
     def _on_nav_id_clicked(self, idx: int) -> None:

@@ -1020,81 +1020,51 @@ class KeyboardKeycapStyles:
 
 
 def keyboard_keycap_styles(theme: ThemeMode) -> KeyboardKeycapStyles:
-    """Клавіші тесту: QFrame#keyCap + QLabel#keyCapLabel."""
+    """Клавіші тесту: одна система для всіх клавіш (основний блок + numpad + Fn)."""
     ff = '"Segoe UI", "Inter", sans-serif'
-    r = "7px"
+    r = "8px"
+    fs = "13px"
     if theme == ThemeMode.DARK:
-        kf, kh, kb = T.KB_TEST_KEY_FACE, T.KB_TEST_KEY_FACE_HOVER, T.D_BORDER_SUBTLE
-        tc, th = T.D_TEXT_PRIMARY, T.D_TEXT_SECONDARY
+        kf, kh, kbd = T.KB_TEST_KEY_FACE, T.KB_TEST_KEY_FACE_HOVER, T.KB_TEST_KEY_BORDER
+        kpress = T.KB_TEST_KEY_FACE_ACTIVE
+        tc = T.D_TEXT_PRIMARY
         ac, acs = T.KB_TEST_ACCENT, T.KB_TEST_ACCENT_SOFT
         base = (
-            f"QFrame#keyCap {{ background: {kf}; border: 1px solid {kb}; border-radius: {r}; }}"
-            f"QFrame#keyCap QLabel#keyCapLabel {{ color: {tc}; font-size: 12px; font-weight: 500; font-family: {ff}; "
-            f"background: transparent; border: none; padding: 0px; }}"
+            f"QFrame#keyCap {{ background-color: {kf}; border: 1px solid {kbd}; border-radius: {r}; }}"
+            f"QFrame#keyCap QLabel#keyCapLabel {{ color: {tc}; font-size: {fs}; font-weight: 500; font-family: {ff}; "
+            f"background: transparent; border: none; padding: 1px 2px; }}"
         )
         hover = (
-            f"QFrame#keyCap {{ background: {kh}; border: 1px solid {kb}; border-radius: {r}; }}"
-            f"QFrame#keyCap QLabel#keyCapLabel {{ color: {tc}; font-size: 12px; font-weight: 500; font-family: {ff}; "
-            f"background: transparent; border: none; }}"
+            f"QFrame#keyCap {{ background-color: {kh}; border: 1px solid {kbd}; border-radius: {r}; }}"
+            f"QFrame#keyCap QLabel#keyCapLabel {{ color: {tc}; font-size: {fs}; font-weight: 500; font-family: {ff}; "
+            f"background: transparent; border: none; padding: 1px 2px; }}"
         )
         active = (
-            f"QFrame#keyCap {{ background: {acs}; border: 2px solid {ac}; border-radius: {r}; }}"
-            f"QFrame#keyCap QLabel#keyCapLabel {{ color: #F8FAFC; font-size: 12px; font-weight: 600; font-family: {ff}; "
-            f"background: transparent; border: none; }}"
+            f"QFrame#keyCap {{ background-color: {kpress}; border: 1px solid {ac}; border-radius: {r}; }}"
+            f"QFrame#keyCap QLabel#keyCapLabel {{ color: #F8FAFC; font-size: {fs}; font-weight: 600; font-family: {ff}; "
+            f"background: transparent; border: none; padding: 1px 2px; }}"
         )
-        fn_tc = "#93C5FD"
-        fn_base = (
-            f"QFrame#keyCap {{ background: {kf}; border: 1px solid {kb}; border-radius: {r}; }}"
-            f"QFrame#keyCap QLabel#keyCapLabel {{ color: {fn_tc}; font-size: 12px; font-weight: 600; font-family: {ff}; "
-            f"background: transparent; border: none; }}"
-        )
-        fn_hover = (
-            f"QFrame#keyCap {{ background: {kh}; border: 1px solid {kb}; border-radius: {r}; }}"
-            f"QFrame#keyCap QLabel#keyCapLabel {{ color: {fn_tc}; font-size: 12px; font-weight: 600; font-family: {ff}; "
-            f"background: transparent; border: none; }}"
-        )
-        fn_active = (
-            f"QFrame#keyCap {{ background: {acs}; border: 2px solid {ac}; border-radius: {r}; }}"
-            f"QFrame#keyCap QLabel#keyCapLabel {{ color: #F8FAFC; font-size: 12px; font-weight: 600; font-family: {ff}; "
-            f"background: transparent; border: none; }}"
-        )
-        return KeyboardKeycapStyles(base, hover, active, fn_base, fn_hover, fn_active)
-    kf, kh = T.L_KB_TEST_KEY_FACE, T.L_KB_TEST_KEY_FACE_HOVER
-    kb = T.L_BORDER_SUBTLE
+        return KeyboardKeycapStyles(base, hover, active, base, hover, active)
+    kf, kh, kbd = T.L_KB_TEST_KEY_FACE, T.L_KB_TEST_KEY_FACE_HOVER, T.L_KB_TEST_KEY_BORDER
+    kpress = T.L_KB_TEST_KEY_FACE_ACTIVE
     tc, tac = T.L_TEXT_PRIMARY, T.L_KB_TEST_ACCENT
     acs = T.L_KB_TEST_ACCENT_SOFT
     base = (
-        f"QFrame#keyCap {{ background: {kf}; border: 1px solid {kb}; border-radius: {r}; }}"
-        f"QFrame#keyCap QLabel#keyCapLabel {{ color: {tc}; font-size: 12px; font-weight: 500; font-family: {ff}; "
-        f"background: transparent; border: none; }}"
+        f"QFrame#keyCap {{ background-color: {kf}; border: 1px solid {kbd}; border-radius: {r}; }}"
+        f"QFrame#keyCap QLabel#keyCapLabel {{ color: {tc}; font-size: {fs}; font-weight: 500; font-family: {ff}; "
+        f"background: transparent; border: none; padding: 1px 2px; }}"
     )
     hover = (
-        f"QFrame#keyCap {{ background: {kh}; border: 1px solid {kb}; border-radius: {r}; }}"
-        f"QFrame#keyCap QLabel#keyCapLabel {{ color: {tc}; font-size: 12px; font-weight: 500; font-family: {ff}; "
-        f"background: transparent; border: none; }}"
+        f"QFrame#keyCap {{ background-color: {kh}; border: 1px solid {kbd}; border-radius: {r}; }}"
+        f"QFrame#keyCap QLabel#keyCapLabel {{ color: {tc}; font-size: {fs}; font-weight: 500; font-family: {ff}; "
+        f"background: transparent; border: none; padding: 1px 2px; }}"
     )
     active = (
-        f"QFrame#keyCap {{ background: {acs}; border: 2px solid {tac}; border-radius: {r}; }}"
-        f"QFrame#keyCap QLabel#keyCapLabel {{ color: {T.L_ACCENT_ACTIVE}; font-size: 12px; font-weight: 600; font-family: {ff}; "
-        f"background: transparent; border: none; }}"
+        f"QFrame#keyCap {{ background-color: {kpress}; border: 1px solid {tac}; border-radius: {r}; }}"
+        f"QFrame#keyCap QLabel#keyCapLabel {{ color: {T.L_TEXT_PRIMARY}; font-size: {fs}; font-weight: 600; font-family: {ff}; "
+        f"background: transparent; border: none; padding: 1px 2px; }}"
     )
-    fn_tc = "#1D4ED8"
-    fn_base = (
-        f"QFrame#keyCap {{ background: {kf}; border: 1px solid {kb}; border-radius: {r}; }}"
-        f"QFrame#keyCap QLabel#keyCapLabel {{ color: {fn_tc}; font-size: 12px; font-weight: 600; font-family: {ff}; "
-        f"background: transparent; border: none; }}"
-    )
-    fn_hover = (
-        f"QFrame#keyCap {{ background: {kh}; border: 1px solid {kb}; border-radius: {r}; }}"
-        f"QFrame#keyCap QLabel#keyCapLabel {{ color: {fn_tc}; font-size: 12px; font-weight: 600; font-family: {ff}; "
-        f"background: transparent; border: none; }}"
-    )
-    fn_active = (
-        f"QFrame#keyCap {{ background: {acs}; border: 2px solid {tac}; border-radius: {r}; }}"
-        f"QFrame#keyCap QLabel#keyCapLabel {{ color: {T.L_ACCENT_ACTIVE}; font-size: 12px; font-weight: 600; font-family: {ff}; "
-        f"background: transparent; border: none; }}"
-    )
-    return KeyboardKeycapStyles(base, hover, active, fn_base, fn_hover, fn_active)
+    return KeyboardKeycapStyles(base, hover, active, base, hover, active)
 
 
 def mouse_test_panel_styles(theme: ThemeMode) -> str:
@@ -1154,29 +1124,25 @@ def mouse_test_pill_style(theme: ThemeMode, down: bool) -> str:
 
 
 def keyboard_test_area_styles(theme: ThemeMode) -> str:
-    """Підкладка клавіатури, numpad-картка, історія натискань."""
+    """Підкладка тесту: одна пластина для main + numpad; історія натискань."""
     if theme == ThemeMode.DARK:
         outer = T.KB_TEST_PLATE_OUTER
         plate = T.KB_TEST_PLATE
-        b = T.D_BORDER_SUBTLE
-        tc = T.D_TEXT_SECONDARY
+        b = T.KB_TEST_KEY_BORDER
         return (
             f"QWidget#keyboardTestRoot {{ background: {outer}; border: none; border-radius: 0px; }}"
-            f"QWidget#keyboardVisual {{ border: none; border-radius: 12px; background: {plate}; padding: 0px; }}"
-            f"QFrame#kbdNumpadCard {{ background: {plate}; border: none; border-radius: 12px; }}"
-            f"QLabel#kbdNumpadTitle {{ color: {tc}; font-size: 13px; font-weight: 600; }}"
+            f"QWidget#keyboardVisual {{ border: 1px solid {b}; border-radius: 12px; background: {plate}; padding: 0px; }}"
+            f"QWidget#kbdNumpadSection {{ background: transparent; border: none; }}"
             f"QLabel#kbHistChip {{ color: {T.D_TEXT_PRIMARY}; font-size: 11px; font-weight: 500; "
             f"background: {T.D_BG_SURFACE2}; border: 1px solid {b}; border-radius: 4px; padding: 2px 8px; }}"
         )
     outer = T.L_KB_TEST_PLATE_OUTER
     plate = T.L_KB_TEST_PLATE
-    b = T.L_BORDER_SUBTLE
-    tc = T.L_TEXT_SECONDARY
+    b = T.L_KB_TEST_KEY_BORDER
     return (
         f"QWidget#keyboardTestRoot {{ background: {outer}; border: none; }}"
         f"QWidget#keyboardVisual {{ border: 1px solid {b}; border-radius: 12px; background: {plate}; padding: 0px; }}"
-        f"QFrame#kbdNumpadCard {{ background: {plate}; border: 1px solid {b}; border-radius: 12px; }}"
-        f"QLabel#kbdNumpadTitle {{ color: {tc}; font-size: 13px; font-weight: 600; }}"
+        f"QWidget#kbdNumpadSection {{ background: transparent; border: none; }}"
         f"QLabel#kbHistChip {{ color: {T.L_TEXT_PRIMARY}; font-size: 11px; font-weight: 500; "
         f"background: {T.L_BG_SURFACE2}; border: 1px solid {b}; border-radius: 4px; padding: 2px 8px; }}"
     )
