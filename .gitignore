@@ -1,0 +1,58 @@
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.so
+*.egg
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+.hypothesis/
+.tox/
+.nox/
+
+# PyInstaller / збірка
+dist/
+build/
+*.spec.bak
+warn-*.txt
+
+# Локальні налаштування та дані застосунку (не комітити)
+config/settings.json
+data/macros/autosave_last.json
+
+# Секрети та локальний env
+.env
+.env.*
+!.env.example
+
+# ОС
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDE / редактори
+.idea/
+*.swp
+*.swo
+*~
+
+# Логи
+*.log
+logs/
