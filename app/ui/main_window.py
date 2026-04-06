@@ -9,13 +9,14 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QByteArray, QEvent, QTimer, Qt, Signal
-from PySide6.QtGui import QCloseEvent, QIcon, QShowEvent
+from PySide6.QtGui import QCloseEvent, QIcon, QPixmap, QShowEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -28,7 +29,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSpinBox,
-    QTabWidget,
+    QStackedWidget,
+    QTabBar,
     QTableWidget,
     QTableWidgetItem,
     QTextEdit,
@@ -36,7 +38,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.branding import WINDOW_TITLE
+from app.branding import (
+    APP_VERSION,
+    STUDIO_AUTHOR,
+    STUDIO_EMAIL,
+    STUDIO_TAGLINE_UK,
+    STUDIO_URL,
+    WINDOW_TITLE,
+)
 from app.core.autoclicker import AutoclickConfig, AutoclickerEngine, ClickMode, MouseButtonChoice
 from app.core.sequence_autoclicker import SequenceAutoclickConfig, SequenceAutoclickerEngine
 from app.core.bind_validator import validate_bindings
@@ -58,7 +67,7 @@ from app.ui.keyboard_test_ui import KeyboardTestPanel, MouseTestPanel
 from app.ui.overlay_widget import ActivityOverlay
 from app.ui.theme import stylesheet_for
 from app.utils.json_io import read_json, write_json
-from app.utils.paths import macros_dir
+from app.utils.paths import assets_dir, macros_dir
 from pynput.mouse import Controller as MouseController
 
 
@@ -69,7 +78,7 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle(WINDOW_TITLE)
-        self.resize(980, 720)
+        self.resize(1080, 740)
         self._settings = load_settings()
         self._autoclick = AutoclickerEngine()
         self._seq_autoclick = SequenceAutoclickerEngine()
@@ -125,25 +134,122 @@ class MainWindow(QMainWindow):
     def _build_ui(self) -> None:
         central = QWidget()
         self.setCentralWidget(central)
-        lay = QVBoxLayout(central)
-        self._tabs = QTabWidget()
-        lay.addWidget(self._tabs)
-        self._tabs.addTab(self._build_autoclick_tab(), "Автоклікер")
-        self._tabs.addTab(self._build_macro_tab(), "Макроси")
-        self._tabs.addTab(self._build_binds_tab(), "Бинди")
-        self._tabs.addTab(self._build_kb_tab(), "Тест клавіатури")
-        self._tabs.addTab(self._build_settings_tab(), "Налаштування")
-        self._tabs.addTab(self._build_logs_tab(), "Логи")
-        self._tabs.currentChanged.connect(self._on_tab_changed)
+        root = QVBoxLayout(central)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        self._tab_bar = QTabBar()
+        self._tab_bar.setObjectName("mainTabBar")
+        self._tab_bar.setExpanding(True)
+        self._tab_bar.setDocumentMode(True)
+        _tab_titles = (
+            "Автоклікер",
+            "Макроси",
+            "Бинди",
+            "Тест клавіатури",
+            "Налаштування",
+            "Логи",
+        )
+        for t in _tab_titles:
+            self._tab_bar.addTab(t)
+
+        self._stack = QStackedWidget()
+        self._stack.setObjectName("mainStack")
+        self._stack.addWidget(self._build_autoclick_tab())
+        self._stack.addWidget(self._build_macro_tab())
+        self._stack.addWidget(self._build_binds_tab())
+        self._stack.addWidget(self._build_kb_tab())
+        self._stack.addWidget(self._build_settings_tab())
+        self._stack.addWidget(self._build_logs_tab())
+        self._tab_bar.currentChanged.connect(self._stack.setCurrentIndex)
+        self._tab_bar.currentChanged.connect(self._on_tab_changed)
+
+        body = QHBoxLayout()
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(0)
+
+        sidebar = QWidget()
+        sidebar.setObjectName("heroSidebar")
+        side_lay = QVBoxLayout(sidebar)
+        side_lay.setContentsMargins(16, 20, 16, 20)
+        side_lay.setSpacing(12)
+        hero = QLabel()
+        hero.setObjectName("heroImage")
+        hero.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
+        img_path = assets_dir() / "images" / "character.png"
+        if img_path.is_file():
+            pm = QPixmap(str(img_path))
+            if not pm.isNull():
+                hero.setPixmap(
+                    pm.scaled(
+                        260,
+                        500,
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+                )
+        hero.setMinimumWidth(248)
+        hero.setMaximumWidth(300)
+        tag = QLabel("Flowaxy")
+        tag.setObjectName("heroTag")
+        tag.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        blurb = QLabel(STUDIO_TAGLINE_UK)
+        blurb.setObjectName("heroBlurb")
+        blurb.setWordWrap(True)
+        blurb.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        author_l = QLabel(STUDIO_AUTHOR)
+        author_l.setObjectName("heroStudioLine")
+        author_l.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        link_l = QLabel(
+            f'<a href="{STUDIO_URL}" style="color:#e57373; text-decoration:none;">flowaxy.com</a>'
+        )
+        link_l.setObjectName("heroLink")
+        link_l.setOpenExternalLinks(True)
+        link_l.setTextFormat(Qt.TextFormat.RichText)
+        link_l.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        mail_l = QLabel(
+            f'<a href="mailto:{STUDIO_EMAIL}" style="color:#b0bec5;">{STUDIO_EMAIL}</a>'
+        )
+        mail_l.setObjectName("heroMail")
+        mail_l.setOpenExternalLinks(True)
+        mail_l.setTextFormat(Qt.TextFormat.RichText)
+        mail_l.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        ver_l = QLabel(f"v{APP_VERSION}")
+        ver_l.setObjectName("heroVersion")
+        ver_l.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        side_lay.addWidget(hero)
+        side_lay.addWidget(tag)
+        side_lay.addWidget(blurb)
+        side_lay.addWidget(author_l)
+        side_lay.addWidget(link_l)
+        side_lay.addWidget(mail_l)
+        side_lay.addWidget(ver_l)
+        side_lay.addStretch(1)
+
+        right = QFrame()
+        right.setObjectName("mainContentFrame")
+        right.setFrameShape(QFrame.Shape.NoFrame)
+        lay = QVBoxLayout(right)
+        lay.setContentsMargins(12, 12, 12, 12)
+        lay.addWidget(self._stack, 1)
+        lay.addSpacing(8)
         self._log_edit = QTextEdit()
         self._log_edit.setReadOnly(True)
         self._log_edit.setMaximumHeight(140)
-        lay.addWidget(QLabel("Журнал подій"))
+        self._log_edit.setObjectName("eventLog")
+        _log_title = QLabel("Журнал подій")
+        _log_title.setObjectName("logSectionTitle")
+        lay.addWidget(_log_title)
         lay.addWidget(self._log_edit)
         self._status = QLabel("Стан: зупинено")
         self._status.setObjectName("statusLabel")
         self._status.setProperty("state", "idle")
         self.statusBar().addPermanentWidget(self._status)
+
+        body.addWidget(sidebar, 0)
+        body.addWidget(right, 1)
+        root.addWidget(self._tab_bar)
+        root.addLayout(body, 1)
 
     def _connect_signals(self) -> None:
         self._kb_hooks.key_event.connect(self._on_test_key)
@@ -156,9 +262,18 @@ class MainWindow(QMainWindow):
             return Path(self._settings.macros_folder)
         return macros_dir()
 
+    def _form_label(self, text: str) -> QLabel:
+        lb = QLabel(text)
+        lb.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        return lb
+
     def _build_autoclick_tab(self) -> QWidget:
         w = QWidget()
         grid = QGridLayout(w)
+        grid.setContentsMargins(4, 8, 4, 8)
+        grid.setHorizontalSpacing(18)
+        grid.setVerticalSpacing(12)
+        grid.setColumnStretch(1, 1)
         r = 0
         self._ac_button = QComboBox()
         self._ac_button.addItems(["ЛКМ", "ПКМ", "СКМ"])
@@ -183,34 +298,35 @@ class MainWindow(QMainWindow):
         self._ac_sx.setValue(self._settings.saved_click_x)
         self._ac_sy.setValue(self._settings.saved_click_y)
         self._lbl_xy = QLabel("Курсор: —")
-        grid.addWidget(QLabel("Кнопка"), r, 0)
+        self._lbl_xy.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        grid.addWidget(self._form_label("Кнопка"), r, 0)
         grid.addWidget(self._ac_button, r, 1)
         r += 1
-        grid.addWidget(QLabel("Режим"), r, 0)
+        grid.addWidget(self._form_label("Режим"), r, 0)
         grid.addWidget(self._ac_mode, r, 1)
         r += 1
         grid.addWidget(self._ac_use_interval, r, 0, 1, 2)
         r += 1
-        grid.addWidget(QLabel("Інтервал (мс)"), r, 0)
+        grid.addWidget(self._form_label("Інтервал (мс)"), r, 0)
         grid.addWidget(self._ac_interval_ms, r, 1)
         r += 1
-        grid.addWidget(QLabel("CPS"), r, 0)
+        grid.addWidget(self._form_label("CPS"), r, 0)
         grid.addWidget(self._ac_cps, r, 1)
         r += 1
-        grid.addWidget(QLabel("Jitter (мс)"), r, 0)
+        grid.addWidget(self._form_label("Jitter (мс)"), r, 0)
         grid.addWidget(self._ac_jitter, r, 1)
         r += 1
         grid.addWidget(self._ac_saved, r, 0, 1, 2)
         r += 1
-        grid.addWidget(QLabel("X"), r, 0)
+        grid.addWidget(self._form_label("X"), r, 0)
         grid.addWidget(self._ac_sx, r, 1)
         r += 1
-        grid.addWidget(QLabel("Y"), r, 0)
+        grid.addWidget(self._form_label("Y"), r, 0)
         grid.addWidget(self._ac_sy, r, 1)
         r += 1
         grid.addWidget(self._lbl_xy, r, 0, 1, 2)
         r += 1
-        grid.addWidget(QLabel("Режим роботи"), r, 0)
+        grid.addWidget(self._form_label("Режим роботи"), r, 0)
         self._ac_work_mode = QComboBox()
         self._ac_work_mode.addItems(["Простий (миша)", "Послідовність", "Повтор клавіші"])
         self._ac_work_mode.currentIndexChanged.connect(self._on_ac_work_mode_changed)
@@ -218,6 +334,8 @@ class MainWindow(QMainWindow):
         r += 1
         self._ac_seq_group = QGroupBox("Кроки послідовності")
         sg = QVBoxLayout(self._ac_seq_group)
+        sg.setContentsMargins(10, 14, 10, 10)
+        sg.setSpacing(10)
         self._ac_seq_table = QTableWidget(0, 3)
         self._ac_seq_table.setHorizontalHeaderLabels(["Тип", "Ключ / кнопка миші", "Затримка (мс)"])
         sg.addWidget(self._ac_seq_table)
@@ -226,10 +344,12 @@ class MainWindow(QMainWindow):
         self._ac_seq_del = QPushButton("Видалити рядок")
         self._ac_seq_add.clicked.connect(self._ac_seq_add_row)
         self._ac_seq_del.clicked.connect(self._ac_seq_del_row)
+        seq_btns.setSpacing(8)
         seq_btns.addWidget(self._ac_seq_add)
         seq_btns.addWidget(self._ac_seq_del)
         sg.addLayout(seq_btns)
         rep_row = QHBoxLayout()
+        rep_row.setSpacing(8)
         self._ac_seq_repeat_mode = QComboBox()
         self._ac_seq_repeat_mode.addItems(["Вся послідовність", "Один крок (за індексом)"])
         self._ac_seq_step_idx = QSpinBox()
@@ -244,13 +364,15 @@ class MainWindow(QMainWindow):
         sg.addLayout(rep_row)
         grid.addWidget(self._ac_seq_group, r, 0, 1, 2)
         r += 1
-        self._ac_key_repeat_label = QLabel("Клавіша для режиму «Повтор»")
+        self._ac_key_repeat_label = self._form_label("Клавіша для режиму «Повтор»")
         grid.addWidget(self._ac_key_repeat_label, r, 0)
         self._ac_key_repeat = QLineEdit()
         self._ac_key_repeat.setPlaceholderText("напр. e або space")
         grid.addWidget(self._ac_key_repeat, r, 1)
         r += 1
         row = QHBoxLayout()
+        row.setSpacing(8)
+        row.setContentsMargins(0, 10, 0, 0)
         self._btn_start = QPushButton("Старт")
         self._btn_start.setObjectName("acStart")
         self._btn_pause = QPushButton("Пауза")
@@ -271,7 +393,23 @@ class MainWindow(QMainWindow):
         self._btn_reset.clicked.connect(self._ac_reset)
         self._btn_save_xy.clicked.connect(self._ac_save_xy)
         self._load_ac_mode_ui()
+        self._update_ac_button_hotkey_labels()
         return w
+
+    def _update_ac_button_hotkey_labels(self) -> None:
+        """Показати на кнопках глобальні бинди з налаштувань."""
+        if not hasattr(self, "_btn_start"):
+            return
+        b = self._settings.bindings
+
+        def suf(ch: HotkeyChord | None) -> str:
+            return f" ({ch.display_string()})" if ch else ""
+
+        self._btn_start.setText("Старт" + suf(b.toggle_autoclick))
+        self._btn_pause.setText("Пауза" + suf(b.pause_autoclick))
+        self._btn_stop.setText("Стоп" + suf(b.toggle_autoclick))
+        self._btn_reset.setText("Скидання")
+        self._btn_save_xy.setText("Зберегти позицію курсора")
 
     def _load_ac_mode_ui(self) -> None:
         s = self._settings
@@ -915,6 +1053,7 @@ class MainWindow(QMainWindow):
         self._settings.bindings = cfg
         save_settings(self._settings)
         self._apply_hotkeys()
+        self._update_ac_button_hotkey_labels()
         logging.getLogger(__name__).info("Бинди оновлено")
 
     def _build_settings_tab(self) -> QWidget:
@@ -1026,7 +1165,7 @@ class MainWindow(QMainWindow):
         return w
 
     def _on_tab_changed(self, idx: int) -> None:
-        name = self._tabs.tabText(idx)
+        name = self._tab_bar.tabText(idx)
         if name == "Тест клавіатури":
             self._kb_hooks.start()
         else:

@@ -14,8 +14,10 @@ a = Analysis(
     binaries=[],
     datas=[
         (str(root / "config" / "settings.example.json"), "config"),
+        (str(root / "config" / "plugin.json"), "config"),
         (str(root / "data" / "macros" / "example_macro.json"), "data/macros"),
         (str(root / "assets" / "icons"), "assets/icons"),
+        (str(root / "assets" / "images"), "assets/images"),
     ],
     hiddenimports=["pynput.keyboard._win32", "pynput.mouse._win32"],
     hookspath=[],
@@ -42,7 +44,8 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    # UPX іноді псує відображення іконки .exe у Провіднику Windows
+    upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,

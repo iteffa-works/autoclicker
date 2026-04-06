@@ -26,8 +26,12 @@ python main.py
 ## Збірка одного портативного `.exe` (onefile)
 
 ```text
-python -m PyInstaller autoclicker.spec
+python -m PyInstaller --clean --noconfirm autoclicker.spec
 ```
+
+Якщо збірка падає з **`PermissionError: ... dist\autoclicker.exe`** — процес **autoclicker.exe** ще запущений (або файл тримає Провідник/антивірус). Закрийте програму з трею та повторіть, або з кореня проєкту: `powershell -ExecutionPolicy Bypass -File .\scripts\build_exe.ps1` (скрипт спробує завершити процес перед збіркою).
+
+Іконка на файлі `.exe` з’являється лише після **повної** перезбірки. Якщо в Провіднику все ще стара картинка — перезапустіть Провідник або ПК (кеш іконок Windows). За потреби перегенеруйте `assets/icons/favicon.ico` з PNG: `python scripts/rebuild_favicon_ico.py` (потрібен Pillow).
 
 Готовий файл: `dist\autoclicker.exe`. Копіюйте на інший ПК без встановлення Python. Налаштування та макроси зберігаються поруч із `.exe` у папках `config\` та `data\`.
 
@@ -36,7 +40,9 @@ python -m PyInstaller autoclicker.spec
 | Шлях | Призначення |
 |------|-------------|
 | `assets/icons/favicon.png`, `assets/icons/favicon.ico` | Іконка вікна, трею та збірки `.exe` |
+| `assets/images/character.png` | Декоративне зображення в лівій панелі головного вікна |
 | `config/settings.json` | Налаштування (створюється автоматично) |
+| `config/plugin.json` | Метадані студії та версія (дублює дані в коді) |
 | `data/macros/*.json` | Збережені макроси |
 
 Приклади: `config/settings.example.json`, `data/macros/example_macro.json`.
