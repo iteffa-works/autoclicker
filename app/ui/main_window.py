@@ -8,9 +8,11 @@ import logging
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QEvent, QTimer, Qt, Signal
+from PySide6.QtCore import QByteArray, QEvent, QSize, QTimer, Qt, Signal
 from PySide6.QtGui import QCloseEvent, QIcon, QPixmap, QShowEvent
 from PySide6.QtWidgets import (
+    QApplication,
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
@@ -18,19 +20,19 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QFrame,
     QGridLayout,
-    QGroupBox,
     QHBoxLayout,
     QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
-    QApplication,
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QHeaderView,
+    QScrollArea,
+    QSizePolicy,
     QSpinBox,
     QStackedWidget,
-    QTabBar,
     QTableWidget,
     QTableWidgetItem,
     QTextEdit,
@@ -40,6 +42,11 @@ from PySide6.QtWidgets import (
 
 from app.branding import (
     APP_VERSION,
+    BRAND_FEATURE_LINES_UK,
+    BRAND_FEATURES_SECTION_UK,
+    BRAND_HINT_UK,
+    PRODUCT_BLURB_UK,
+    PRODUCT_TITLE_UK,
     STUDIO_AUTHOR,
     STUDIO_EMAIL,
     STUDIO_TAGLINE_UK,
@@ -65,10 +72,36 @@ from app.services.tray_service import TrayService
 from app.ui.keyboard_test_hooks import KeyboardTestHooks
 from app.ui.keyboard_test_ui import KeyboardTestPanel, MouseTestPanel
 from app.ui.overlay_widget import ActivityOverlay
+from app.ui.app_icons import NAV_ICON_KEYS, app_icon, icon_kind_size
+from app.ui.design_tokens import (
+    AC_COL_COMBO_MAX_W,
+    AC_COL_FIELD_MAX_W,
+    AC_GRID_LABEL_W,
+    BINDS_LABEL_MIN_W,
+    CONTENT_PADDING,
+    FORM_COMBO_MAX_W,
+    FORM_FIELD_MAX_W,
+    FORM_LABEL_MIN_W,
+    MACRO_SIDE_BTN_MIN_W,
+    MAX_CONTENT_WIDTH,
+    S16,
+    S24,
+    WINDOW_HEIGHT,
+    WINDOW_WIDTH,
+)
 from app.ui.theme import stylesheet_for
 from app.utils.json_io import read_json, write_json
 from app.utils.paths import assets_dir, macros_dir
 from pynput.mouse import Controller as MouseController
+
+_NAV_TITLES = (
+    "Автоклікер",
+    "Макроси",
+    "Тест клавіатури",
+    "Налаштування",
+    "Логи",
+)
+_NAV_INDEX_KEYBOARD_TEST = 2
 
 
 class MainWindow(QMainWindow):
@@ -78,8 +111,10 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle(WINDOW_TITLE)
-        self.resize(1080, 740)
+        self.setFixedSize(WINDOW_WIDTH, WINDOW_HEIGHT)
+        self._apply_no_maximize_button()
         self._settings = load_settings()
+        self._icon_targets: list[tuple[QWidget, str, str]] = []
         self._autoclick = AutoclickerEngine()
         self._seq_autoclick = SequenceAutoclickerEngine()
         self._macro_engine = MacroEngine()
@@ -103,6 +138,7 @@ class MainWindow(QMainWindow):
         self._autosave_timer.timeout.connect(self._autosave_macro)
 
         self._setup_logging()
+        self._create_autoclick_buttons()
         self._build_ui()
         self._connect_signals()
         self._cursor_timer = QTimer(self)
@@ -113,6 +149,9 @@ class MainWindow(QMainWindow):
         self.macro_done.connect(self._refresh_status)
         self._apply_theme()
         self._refresh_status()
+
+    def _apply_no_maximize_button(self) -> None:
+        self.setWindowFlag(Qt.WindowType.WindowMaximizeButtonHint, False)
 
     def setup_tray(self, icon: QIcon) -> None:
         self._tray.setup(
@@ -131,6 +170,41 @@ class MainWindow(QMainWindow):
         setup_logging(self._settings.log_level, self._settings.log_to_file, ui_emit)
         logging.getLogger(__name__).info("Запуск застосунку")
 
+    def _create_autoclick_buttons(self) -> None:
+        self._btn_start = QPushButton("Старт")
+        self._btn_start.setObjectName("acStart")
+        self._btn_pause = QPushButton("Пауза")
+        self._btn_pause.setObjectName("acPause")
+        self._btn_stop = QPushButton("Стоп")
+        self._btn_stop.setObjectName("acStop")
+        self._btn_reset = QPushButton("Скидання")
+        self._btn_save_xy = QPushButton("Зберегти позицію курсора")
+        self._btn_start.clicked.connect(self._ac_start)
+        self._btn_pause.clicked.connect(self._ac_pause)
+        self._btn_stop.clicked.connect(self._ac_stop)
+        self._btn_reset.clicked.connect(self._ac_reset)
+        self._btn_save_xy.clicked.connect(self._ac_save_xy)
+        self._register_icon_widget(self._btn_start, "action_play", "toolbar")
+        self._register_icon_widget(self._btn_pause, "action_pause", "toolbar")
+        self._register_icon_widget(self._btn_stop, "action_stop", "toolbar")
+        self._register_icon_widget(self._btn_reset, "action_undo", "toolbar")
+        self._register_icon_widget(self._btn_save_xy, "action_crosshairs", "toolbar")
+
+    def _register_icon_widget(self, w: QWidget, key: str, kind: str) -> None:
+        self._icon_targets.append((w, key, kind))
+
+    def _refresh_ui_icons(self) -> None:
+        t = self._settings.theme
+        for w, key, kind in self._icon_targets:
+            ic = app_icon(key, t)
+            sz = icon_kind_size(kind)
+            qsz = QSize(sz, sz)
+            if isinstance(w, QPushButton):
+                w.setIcon(ic)
+                w.setIconSize(qsz)
+            elif isinstance(w, QLabel):
+                w.setPixmap(ic.pixmap(qsz))
+
     def _build_ui(self) -> None:
         central = QWidget()
         self.setCentralWidget(central)
@@ -138,118 +212,203 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        self._tab_bar = QTabBar()
-        self._tab_bar.setObjectName("mainTabBar")
-        self._tab_bar.setExpanding(True)
-        self._tab_bar.setDocumentMode(True)
-        _tab_titles = (
-            "Автоклікер",
-            "Макроси",
-            "Бинди",
-            "Тест клавіатури",
-            "Налаштування",
-            "Логи",
-        )
-        for t in _tab_titles:
-            self._tab_bar.addTab(t)
-
-        self._stack = QStackedWidget()
-        self._stack.setObjectName("mainStack")
-        self._stack.addWidget(self._build_autoclick_tab())
-        self._stack.addWidget(self._build_macro_tab())
-        self._stack.addWidget(self._build_binds_tab())
-        self._stack.addWidget(self._build_kb_tab())
-        self._stack.addWidget(self._build_settings_tab())
-        self._stack.addWidget(self._build_logs_tab())
-        self._tab_bar.currentChanged.connect(self._stack.setCurrentIndex)
-        self._tab_bar.currentChanged.connect(self._on_tab_changed)
+        header = QWidget()
+        header.setObjectName("headerBar")
+        head_lay = QHBoxLayout(header)
+        head_lay.setContentsMargins(S16, 6, S16, 6)
+        head_lay.setSpacing(8)
+        nav_wrap = QWidget()
+        nav_lay = QHBoxLayout(nav_wrap)
+        nav_lay.setContentsMargins(0, 0, 0, 0)
+        nav_lay.setSpacing(6)
+        self._nav_group = QButtonGroup(self)
+        self._nav_group.setExclusive(True)
+        for i, title in enumerate(_NAV_TITLES):
+            nb = QPushButton(title)
+            nb.setObjectName("headerNavButton")
+            nb.setCheckable(True)
+            self._nav_group.addButton(nb, i)
+            self._register_icon_widget(nb, NAV_ICON_KEYS[i], "nav")
+            nav_lay.addWidget(nb)
+        self._nav_group.button(0).setChecked(True)
+        self._nav_group.idClicked.connect(self._on_nav_id_clicked)
+        head_lay.addWidget(nav_wrap, 0)
+        head_lay.addStretch(1)
+        head_lay.addWidget(self._btn_start)
+        head_lay.addWidget(self._btn_pause)
+        head_lay.addWidget(self._btn_stop)
+        root.addWidget(header)
 
         body = QHBoxLayout()
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(0)
 
-        sidebar = QWidget()
-        sidebar.setObjectName("heroSidebar")
-        side_lay = QVBoxLayout(sidebar)
-        side_lay.setContentsMargins(16, 20, 16, 20)
-        side_lay.setSpacing(12)
-        hero = QLabel()
-        hero.setObjectName("heroImage")
-        hero.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
-        img_path = assets_dir() / "images" / "character.png"
-        if img_path.is_file():
-            pm = QPixmap(str(img_path))
-            if not pm.isNull():
-                hero.setPixmap(
-                    pm.scaled(
-                        260,
-                        500,
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation,
-                    )
+        sidebar_wrap = QWidget()
+        sidebar_wrap.setObjectName("brandingPanel")
+        sidebar_wrap.setFixedWidth(260)
+        side_col = QVBoxLayout(sidebar_wrap)
+        side_col.setContentsMargins(0, 0, 0, 0)
+        side_col.setSpacing(0)
+        _char_path = assets_dir() / "images" / "character.png"
+        _pix = QPixmap(str(_char_path))
+        if not _pix.isNull():
+            _char = QLabel()
+            _char.setObjectName("sidebarCharacter")
+            _char.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            _char.setFixedWidth(260)
+            _char.setPixmap(
+                _pix.scaled(
+                    260,
+                    168,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
                 )
-        hero.setMinimumWidth(248)
-        hero.setMaximumWidth(300)
-        tag = QLabel("Flowaxy")
-        tag.setObjectName("heroTag")
-        tag.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        blurb = QLabel(STUDIO_TAGLINE_UK)
-        blurb.setObjectName("heroBlurb")
-        blurb.setWordWrap(True)
-        blurb.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        author_l = QLabel(STUDIO_AUTHOR)
-        author_l.setObjectName("heroStudioLine")
-        author_l.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        link_l = QLabel(
-            f'<a href="{STUDIO_URL}" style="color:#e57373; text-decoration:none;">flowaxy.com</a>'
+            )
+            side_col.addWidget(_char)
+        _divider = QFrame()
+        _divider.setObjectName("brandDivider")
+        _divider.setFrameShape(QFrame.Shape.HLine)
+        _divider.setFixedHeight(2)
+        side_col.addWidget(_divider)
+        _brand = QWidget()
+        _bl = QVBoxLayout(_brand)
+        _bl.setContentsMargins(10, 8, 10, 10)
+        _bl.setSpacing(6)
+        _title = QLabel("Flowaxy")
+        _title.setObjectName("brandTitle")
+        _title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _product = QLabel(PRODUCT_TITLE_UK)
+        _product.setObjectName("brandProductSubtitle")
+        _product.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _product.setWordWrap(True)
+        _blurb = QLabel(PRODUCT_BLURB_UK)
+        _blurb.setObjectName("brandBlurb")
+        _blurb.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _blurb.setWordWrap(True)
+        _tag = QLabel(STUDIO_TAGLINE_UK)
+        _tag.setObjectName("brandTagline")
+        _tag.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _tag.setWordWrap(True)
+        _author = QLabel(STUDIO_AUTHOR)
+        _author.setObjectName("brandAuthor")
+        _author.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _info = QFrame()
+        _info.setObjectName("brandInfoCard")
+        _il = QVBoxLayout(_info)
+        _il.setContentsMargins(10, 10, 10, 10)
+        _il.setSpacing(8)
+        _sec_feat = QLabel(BRAND_FEATURES_SECTION_UK)
+        _sec_feat.setObjectName("brandSectionTitle")
+        _feat = QLabel("\n".join(f"• {line}" for line in BRAND_FEATURE_LINES_UK))
+        _feat.setObjectName("brandFeaturesList")
+        _feat.setWordWrap(True)
+        _hint = QLabel(BRAND_HINT_UK)
+        _hint.setObjectName("brandHint")
+        _hint.setWordWrap(True)
+        _il.addWidget(_sec_feat)
+        _il.addWidget(_feat)
+        _il.addWidget(_hint)
+        _div_bottom = QFrame()
+        _div_bottom.setObjectName("brandDivider")
+        _div_bottom.setFrameShape(QFrame.Shape.HLine)
+        _div_bottom.setFixedHeight(2)
+        _site = QLabel(
+            f'<a href="{STUDIO_URL}" style="color:#EF4444;text-decoration:none;">flowaxy.com</a>'
         )
-        link_l.setObjectName("heroLink")
-        link_l.setOpenExternalLinks(True)
-        link_l.setTextFormat(Qt.TextFormat.RichText)
-        link_l.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        mail_l = QLabel(
-            f'<a href="mailto:{STUDIO_EMAIL}" style="color:#b0bec5;">{STUDIO_EMAIL}</a>'
+        _site.setObjectName("brandLink")
+        _site.setOpenExternalLinks(True)
+        _site.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _mail = QLabel(
+            f'<a href="mailto:{STUDIO_EMAIL}" style="color:#EF4444;">contact@flowaxy.com</a>'
         )
-        mail_l.setObjectName("heroMail")
-        mail_l.setOpenExternalLinks(True)
-        mail_l.setTextFormat(Qt.TextFormat.RichText)
-        mail_l.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        ver_l = QLabel(f"v{APP_VERSION}")
-        ver_l.setObjectName("heroVersion")
-        ver_l.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        side_lay.addWidget(hero)
-        side_lay.addWidget(tag)
-        side_lay.addWidget(blurb)
-        side_lay.addWidget(author_l)
-        side_lay.addWidget(link_l)
-        side_lay.addWidget(mail_l)
-        side_lay.addWidget(ver_l)
-        side_lay.addStretch(1)
+        _mail.setObjectName("brandLink")
+        _mail.setOpenExternalLinks(True)
+        _mail.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _ver = QLabel(f"v{APP_VERSION}")
+        _ver.setObjectName("brandVersion")
+        _ver.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        for w in (
+            _title,
+            _product,
+            _blurb,
+            _tag,
+            _author,
+            _info,
+        ):
+            _bl.addWidget(w)
+        _bl.addStretch(1)
+        _bl.addWidget(_div_bottom)
+        for w in (_site, _mail, _ver):
+            _bl.addWidget(w)
+        side_col.addWidget(_brand, 1)
 
-        right = QFrame()
-        right.setObjectName("mainContentFrame")
-        right.setFrameShape(QFrame.Shape.NoFrame)
-        lay = QVBoxLayout(right)
-        lay.setContentsMargins(12, 12, 12, 12)
-        lay.addWidget(self._stack, 1)
-        lay.addSpacing(8)
         self._log_edit = QTextEdit()
         self._log_edit.setReadOnly(True)
-        self._log_edit.setMaximumHeight(140)
         self._log_edit.setObjectName("eventLog")
-        _log_title = QLabel("Журнал подій")
-        _log_title.setObjectName("logSectionTitle")
-        lay.addWidget(_log_title)
-        lay.addWidget(self._log_edit)
-        self._status = QLabel("Стан: зупинено")
-        self._status.setObjectName("statusLabel")
-        self._status.setProperty("state", "idle")
-        self.statusBar().addPermanentWidget(self._status)
+        self._log_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
-        body.addWidget(sidebar, 0)
-        body.addWidget(right, 1)
-        root.addWidget(self._tab_bar)
+        self._stack = QStackedWidget()
+        self._stack.setObjectName("mainStack")
+        self._stack.addWidget(self._build_autoclick_tab())
+        self._stack.addWidget(self._build_macro_tab())
+        self._stack.addWidget(self._build_kb_tab())
+        self._stack.addWidget(self._build_settings_tab())
+        self._stack.addWidget(self._build_logs_tab())
+
+        scroll_inner = QWidget()
+        sil = QVBoxLayout(scroll_inner)
+        sil.setContentsMargins(CONTENT_PADDING, CONTENT_PADDING, CONTENT_PADDING, CONTENT_PADDING)
+        sil.setSpacing(2)
+        self._stack.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        sil.addWidget(self._stack, 1)
+
+        center = QWidget()
+        center.setMaximumWidth(MAX_CONTENT_WIDTH)
+        center.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        c_lay = QVBoxLayout(center)
+        c_lay.setContentsMargins(0, 0, 0, 0)
+        c_lay.addWidget(scroll_inner)
+
+        wrap_row = QWidget()
+        wrap_lay = QHBoxLayout(wrap_row)
+        wrap_lay.setContentsMargins(0, 0, 0, 0)
+        wrap_lay.addStretch(1)
+        wrap_lay.addWidget(center)
+        wrap_lay.addStretch(1)
+
+        content_area = QWidget()
+        content_area.setObjectName("contentArea")
+        ca_lay = QVBoxLayout(content_area)
+        ca_lay.setContentsMargins(0, 0, 0, 0)
+        ca_lay.addWidget(wrap_row, 1)
+
+        _side_div = QFrame()
+        _side_div.setObjectName("sidebarVerticalDivider")
+        _side_div.setFrameShape(QFrame.Shape.NoFrame)
+        _side_div.setFixedWidth(2)
+        _side_div.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+
+        body.addWidget(sidebar_wrap, 0)
+        body.addWidget(_side_div, 0)
+        body.addWidget(content_area, 1)
         root.addLayout(body, 1)
+
+        footer = QWidget()
+        footer.setObjectName("appFooter")
+        foot_lay = QHBoxLayout(footer)
+        foot_lay.setContentsMargins(S16, 6, S16, 6)
+        foot_lay.setSpacing(S16)
+        self._footer_info = QLabel(f"{STUDIO_AUTHOR} · v{APP_VERSION}")
+        self._footer_info.setObjectName("footerSecondary")
+        self._footer_status = QLabel("Стан: зупинено")
+        self._footer_status.setObjectName("footerStatusLabel")
+        self._footer_status.setProperty("state", "idle")
+        foot_lay.addWidget(self._footer_info, 0)
+        foot_lay.addStretch(1)
+        foot_lay.addWidget(self._footer_status, 0)
+        root.addWidget(footer)
+
+        self.statusBar().hide()
 
     def _connect_signals(self) -> None:
         self._kb_hooks.key_event.connect(self._on_test_key)
@@ -264,17 +423,90 @@ class MainWindow(QMainWindow):
 
     def _form_label(self, text: str) -> QLabel:
         lb = QLabel(text)
+        lb.setObjectName("formFieldLabel")
         lb.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        lb.setMinimumWidth(FORM_LABEL_MIN_W)
+        lb.setMaximumWidth(FORM_LABEL_MIN_W + 24)
         return lb
+
+    def _form_label_compact(self, text: str) -> QLabel:
+        lb = QLabel(text)
+        lb.setObjectName("formFieldLabel")
+        lb.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        lb.setFixedWidth(AC_GRID_LABEL_W)
+        lb.setWordWrap(True)
+        return lb
+
+    def _bind_row_label(self, text: str) -> QLabel:
+        lb = QLabel(text)
+        lb.setObjectName("formFieldLabel")
+        lb.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        lb.setMinimumWidth(BINDS_LABEL_MIN_W)
+        lb.setMaximumWidth(BINDS_LABEL_MIN_W + 80)
+        lb.setWordWrap(True)
+        return lb
+
+    def _inline_lbl(self, text: str, w: int = 72) -> QLabel:
+        lb = QLabel(text)
+        lb.setObjectName("formInlineLabel")
+        lb.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        lb.setFixedWidth(w)
+        return lb
+
+    def _pair_labeled(self, text: str, ctrl: QWidget, lab_w: int = 72) -> QWidget:
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+        row.addWidget(self._inline_lbl(text, lab_w), 0, Qt.AlignmentFlag.AlignVCenter)
+        row.addWidget(ctrl, 0, Qt.AlignmentFlag.AlignVCenter)
+        wrap = QWidget()
+        wrap.setLayout(row)
+        return wrap
+
+    def _settings_lbl(self, text: str) -> QLabel:
+        lb = QLabel(text)
+        lb.setObjectName("formFieldLabel")
+        lb.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        lb.setFixedWidth(200)
+        lb.setWordWrap(True)
+        return lb
+
+    def _field_max_width(self, w: QWidget, max_w: int) -> None:
+        w.setMaximumWidth(max_w)
+        w.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+
+    def _section_card(self, title: str, icon_key: str | None = None) -> tuple[QFrame, QVBoxLayout]:
+        card = QFrame()
+        card.setObjectName("contentCard")
+        lay = QVBoxLayout(card)
+        lay.setSpacing(5)
+        lay.setContentsMargins(6, 6, 6, 6)
+        if title:
+            if icon_key:
+                head = QHBoxLayout()
+                head.setSpacing(6)
+                il = QLabel()
+                il.setObjectName("sectionTitleIcon")
+                il.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                self._register_icon_widget(il, icon_key, "section")
+                tl = QLabel(title)
+                tl.setObjectName("sectionTitle")
+                head.addWidget(il, 0, Qt.AlignmentFlag.AlignVCenter)
+                head.addWidget(tl, 0, Qt.AlignmentFlag.AlignVCenter)
+                head.addStretch(1)
+                lay.addLayout(head)
+            else:
+                tl = QLabel(title)
+                tl.setObjectName("sectionTitle")
+                lay.addWidget(tl)
+        return card, lay
 
     def _build_autoclick_tab(self) -> QWidget:
         w = QWidget()
-        grid = QGridLayout(w)
-        grid.setContentsMargins(4, 8, 4, 8)
-        grid.setHorizontalSpacing(18)
-        grid.setVerticalSpacing(12)
-        grid.setColumnStretch(1, 1)
-        r = 0
+        outer = QVBoxLayout(w)
+        outer.setSpacing(2)
+        outer.setContentsMargins(0, 0, 0, 0)
+
         self._ac_button = QComboBox()
         self._ac_button.addItems(["ЛКМ", "ПКМ", "СКМ"])
         self._ac_mode = QComboBox()
@@ -287,6 +519,7 @@ class MainWindow(QMainWindow):
         self._ac_cps.setValue(5)
         self._ac_use_interval = QCheckBox("Використовувати інтервал (мс), інакше CPS")
         self._ac_use_interval.setChecked(True)
+        self._ac_use_interval.setWordWrap(True)
         self._ac_jitter = QDoubleSpinBox()
         self._ac_jitter.setRange(0, 5000)
         self._ac_jitter.setValue(5)
@@ -298,100 +531,202 @@ class MainWindow(QMainWindow):
         self._ac_sx.setValue(self._settings.saved_click_x)
         self._ac_sy.setValue(self._settings.saved_click_y)
         self._lbl_xy = QLabel("Курсор: —")
+        self._lbl_xy.setObjectName("formHint")
         self._lbl_xy.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        grid.addWidget(self._form_label("Кнопка"), r, 0)
-        grid.addWidget(self._ac_button, r, 1)
-        r += 1
-        grid.addWidget(self._form_label("Режим"), r, 0)
-        grid.addWidget(self._ac_mode, r, 1)
-        r += 1
-        grid.addWidget(self._ac_use_interval, r, 0, 1, 2)
-        r += 1
-        grid.addWidget(self._form_label("Інтервал (мс)"), r, 0)
-        grid.addWidget(self._ac_interval_ms, r, 1)
-        r += 1
-        grid.addWidget(self._form_label("CPS"), r, 0)
-        grid.addWidget(self._ac_cps, r, 1)
-        r += 1
-        grid.addWidget(self._form_label("Jitter (мс)"), r, 0)
-        grid.addWidget(self._ac_jitter, r, 1)
-        r += 1
-        grid.addWidget(self._ac_saved, r, 0, 1, 2)
-        r += 1
-        grid.addWidget(self._form_label("X"), r, 0)
-        grid.addWidget(self._ac_sx, r, 1)
-        r += 1
-        grid.addWidget(self._form_label("Y"), r, 0)
-        grid.addWidget(self._ac_sy, r, 1)
-        r += 1
-        grid.addWidget(self._lbl_xy, r, 0, 1, 2)
-        r += 1
-        grid.addWidget(self._form_label("Режим роботи"), r, 0)
+
+        c1, l1 = self._section_card("Клік", "section_click")
+        g1 = QGridLayout()
+        g1.setHorizontalSpacing(4)
+        g1.setVerticalSpacing(4)
+        g1.setColumnStretch(1, 1)
+        g1.addWidget(self._form_label_compact("Кнопка"), 0, 0)
+        g1.addWidget(self._ac_button, 0, 1)
+        g1.addWidget(self._form_label_compact("Режим"), 1, 0)
+        g1.addWidget(self._ac_mode, 1, 1)
+        l1.addLayout(g1)
+
+        c2, l2 = self._section_card("Інтервали та CPS", "section_intervals")
+        l2.addWidget(self._ac_use_interval)
+        g2 = QGridLayout()
+        g2.setHorizontalSpacing(4)
+        g2.setVerticalSpacing(4)
+        g2.setColumnStretch(1, 1)
+        g2.addWidget(self._form_label_compact("Інтервал (мс)"), 0, 0)
+        g2.addWidget(self._ac_interval_ms, 0, 1)
+        g2.addWidget(self._form_label_compact("CPS"), 1, 0)
+        g2.addWidget(self._ac_cps, 1, 1)
+        g2.addWidget(self._form_label_compact("Jitter (мс)"), 2, 0)
+        g2.addWidget(self._ac_jitter, 2, 1)
+        l2.addLayout(g2)
+
+        c3, l3 = self._section_card("Позиція", "section_position")
+        g3 = QGridLayout()
+        g3.setHorizontalSpacing(4)
+        g3.setVerticalSpacing(4)
+        g3.setColumnStretch(1, 1)
+        g3.addWidget(self._ac_saved, 0, 0, 1, 2)
+        g3.addWidget(self._form_label_compact("X"), 1, 0)
+        g3.addWidget(self._ac_sx, 1, 1)
+        g3.addWidget(self._form_label_compact("Y"), 2, 0)
+        g3.addWidget(self._ac_sy, 2, 1)
+        g3.addWidget(self._lbl_xy, 3, 0, 1, 2)
+        l3.addLayout(g3)
+
+        c4, l4 = self._section_card("Режим роботи", "section_work_mode")
         self._ac_work_mode = QComboBox()
         self._ac_work_mode.addItems(["Простий (миша)", "Послідовність", "Повтор клавіші"])
         self._ac_work_mode.currentIndexChanged.connect(self._on_ac_work_mode_changed)
-        grid.addWidget(self._ac_work_mode, r, 1)
-        r += 1
-        self._ac_seq_group = QGroupBox("Кроки послідовності")
-        sg = QVBoxLayout(self._ac_seq_group)
-        sg.setContentsMargins(10, 14, 10, 10)
-        sg.setSpacing(10)
+        g4 = QGridLayout()
+        g4.setHorizontalSpacing(4)
+        g4.setVerticalSpacing(4)
+        g4.setColumnStretch(1, 1)
+        g4.addWidget(self._form_label_compact("Режим"), 0, 0)
+        g4.addWidget(self._ac_work_mode, 0, 1)
+        l4.addLayout(g4)
+
+        self._ac_key_repeat_card, l5 = self._section_card("Повтор клавіші", "section_key_repeat")
+        self._ac_key_repeat_label = self._form_label_compact("Клавіша")
+        self._ac_key_repeat = QLineEdit()
+        self._ac_key_repeat.setPlaceholderText("напр. e або space")
+        g5 = QGridLayout()
+        g5.setHorizontalSpacing(4)
+        g5.setVerticalSpacing(4)
+        g5.setColumnStretch(1, 1)
+        g5.addWidget(self._ac_key_repeat_label, 0, 0)
+        g5.addWidget(self._ac_key_repeat, 0, 1)
+        l5.addLayout(g5)
+
+        row_top = QHBoxLayout()
+        row_top.setSpacing(4)
+        row_top.addWidget(c1, 1, Qt.AlignmentFlag.AlignTop)
+        row_top.addWidget(c2, 1, Qt.AlignmentFlag.AlignTop)
+        row_top.addWidget(c3, 1, Qt.AlignmentFlag.AlignTop)
+        outer.addLayout(row_top)
+
+        row_mid = QHBoxLayout()
+        row_mid.setSpacing(4)
+        row_mid.addWidget(c4, 1, Qt.AlignmentFlag.AlignTop)
+        row_mid.addWidget(self._ac_key_repeat_card, 1, Qt.AlignmentFlag.AlignTop)
+        outer.addLayout(row_mid)
+
+        _hs = self._settings
+        self._ac_human_card, hmain = self._section_card("Природна варіативність")
+        self._ac_humanize = QCheckBox("Додаткові випадкові паузи між кліками")
+        self._ac_humanize.setChecked(_hs.ac_humanize_enabled)
+        self._ac_gauss_jitter = QCheckBox("Гаусівський розкид джитера (замість рівномірного)")
+        self._ac_gauss_jitter.setChecked(_hs.ac_jitter_gaussian)
+        self._ac_pause_chance = QDoubleSpinBox()
+        self._ac_pause_chance.setRange(0, 25)
+        self._ac_pause_chance.setDecimals(1)
+        self._ac_pause_chance.setSuffix(" %")
+        self._ac_pause_chance.setValue(_hs.ac_pause_chance_percent)
+        self._ac_pause_extra = QDoubleSpinBox()
+        self._ac_pause_extra.setRange(20, 4000)
+        self._ac_pause_extra.setDecimals(0)
+        self._ac_pause_extra.setValue(_hs.ac_pause_extra_ms)
+        self._ac_micro_move = QSpinBox()
+        self._ac_micro_move.setRange(0, 48)
+        self._ac_micro_move.setValue(_hs.ac_micro_move_px)
+        self._ac_pre_click = QDoubleSpinBox()
+        self._ac_pre_click.setRange(0, 120)
+        self._ac_pre_click.setDecimals(0)
+        self._ac_pre_click.setValue(_hs.ac_pre_click_delay_ms_max)
+        hmain.addWidget(self._ac_humanize)
+        hmain.addWidget(self._ac_gauss_jitter)
+        hg = QGridLayout()
+        hg.setHorizontalSpacing(4)
+        hg.setVerticalSpacing(4)
+        hg.setColumnStretch(1, 1)
+        hg.addWidget(self._form_label_compact("Ймовірність паузи"), 0, 0)
+        hg.addWidget(self._ac_pause_chance, 0, 1)
+        hg.addWidget(self._form_label_compact("Макс. додаткова пауза"), 1, 0)
+        hg.addWidget(self._ac_pause_extra, 1, 1)
+        hg.addWidget(self._form_label_compact("Мікрозміщення ±px"), 2, 0)
+        hg.addWidget(self._ac_micro_move, 2, 1)
+        hg.addWidget(self._form_label_compact("Затримка перед кліком (макс. мс)"), 3, 0)
+        hg.addWidget(self._ac_pre_click, 3, 1)
+        hmain.addLayout(hg)
+        _hum_hint = QLabel(
+            "Не гарантує обхід захисту ігор; дотримуйтесь правил сервісів. "
+            "Мікрозміщення діє, коли не ввімкнено «Клік по збережених X/Y»."
+        )
+        _hum_hint.setObjectName("formHint")
+        _hum_hint.setWordWrap(True)
+        hmain.addWidget(_hum_hint)
+        outer.addWidget(self._ac_human_card)
+
+        self._ac_seq_group, sg = self._section_card("Кроки послідовності", "section_sequence")
+        sg.setSpacing(3)
         self._ac_seq_table = QTableWidget(0, 3)
         self._ac_seq_table.setHorizontalHeaderLabels(["Тип", "Ключ / кнопка миші", "Затримка (мс)"])
+        self._ac_seq_table.setMinimumHeight(88)
+        self._ac_seq_table.setAlternatingRowColors(True)
+        self._ac_seq_table.verticalHeader().setVisible(False)
+        self._ac_seq_table.setShowGrid(True)
+        _seq_hdr = self._ac_seq_table.horizontalHeader()
+        _seq_hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        _seq_hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        _seq_hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        _seq_hdr.setMinimumSectionSize(88)
+        _seq_hdr.setStretchLastSection(False)
+        _seq_hdr.setDefaultAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
         sg.addWidget(self._ac_seq_table)
         seq_btns = QHBoxLayout()
         self._ac_seq_add = QPushButton("Додати рядок")
+        self._ac_seq_add.setObjectName("seqRowButton")
         self._ac_seq_del = QPushButton("Видалити рядок")
+        self._ac_seq_del.setObjectName("seqRowButton")
         self._ac_seq_add.clicked.connect(self._ac_seq_add_row)
         self._ac_seq_del.clicked.connect(self._ac_seq_del_row)
-        seq_btns.setSpacing(8)
+        self._register_icon_widget(self._ac_seq_add, "action_plus", "toolbar")
+        self._register_icon_widget(self._ac_seq_del, "action_minus", "toolbar")
+        seq_btns.setSpacing(4)
         seq_btns.addWidget(self._ac_seq_add)
         seq_btns.addWidget(self._ac_seq_del)
         sg.addLayout(seq_btns)
         rep_row = QHBoxLayout()
-        rep_row.setSpacing(8)
+        rep_row.setSpacing(6)
         self._ac_seq_repeat_mode = QComboBox()
         self._ac_seq_repeat_mode.addItems(["Вся послідовність", "Один крок (за індексом)"])
         self._ac_seq_step_idx = QSpinBox()
         self._ac_seq_step_idx.setRange(0, 10_000)
         self._ac_seq_loop_inf = QCheckBox("Повторювати безкінечно")
         self._ac_seq_loop_inf.setChecked(True)
-        rep_row.addWidget(QLabel("Повтор"))
-        rep_row.addWidget(self._ac_seq_repeat_mode)
-        rep_row.addWidget(QLabel("Індекс кроку"))
-        rep_row.addWidget(self._ac_seq_step_idx)
-        rep_row.addWidget(self._ac_seq_loop_inf)
+        rep_row.addWidget(self._pair_labeled("Повтор", self._ac_seq_repeat_mode, 88))
+        rep_row.addWidget(self._pair_labeled("Індекс кроку", self._ac_seq_step_idx, 100))
+        rep_row.addStretch(1)
+        rep_row.addWidget(self._ac_seq_loop_inf, 0, Qt.AlignmentFlag.AlignVCenter)
         sg.addLayout(rep_row)
-        grid.addWidget(self._ac_seq_group, r, 0, 1, 2)
-        r += 1
-        self._ac_key_repeat_label = self._form_label("Клавіша для режиму «Повтор»")
-        grid.addWidget(self._ac_key_repeat_label, r, 0)
-        self._ac_key_repeat = QLineEdit()
-        self._ac_key_repeat.setPlaceholderText("напр. e або space")
-        grid.addWidget(self._ac_key_repeat, r, 1)
-        r += 1
+        outer.addWidget(self._ac_seq_group)
+
+        for _w in (self._ac_button, self._ac_mode, self._ac_work_mode, self._ac_seq_repeat_mode):
+            self._field_max_width(_w, AC_COL_COMBO_MAX_W)
+        for _w in (
+            self._ac_interval_ms,
+            self._ac_cps,
+            self._ac_jitter,
+            self._ac_sx,
+            self._ac_sy,
+            self._ac_seq_step_idx,
+        ):
+            self._field_max_width(_w, AC_COL_FIELD_MAX_W)
+        self._field_max_width(self._ac_key_repeat, AC_COL_COMBO_MAX_W)
+        for _w in (
+            self._ac_pause_chance,
+            self._ac_pause_extra,
+            self._ac_micro_move,
+            self._ac_pre_click,
+        ):
+            self._field_max_width(_w, AC_COL_FIELD_MAX_W)
+
         row = QHBoxLayout()
-        row.setSpacing(8)
-        row.setContentsMargins(0, 10, 0, 0)
-        self._btn_start = QPushButton("Старт")
-        self._btn_start.setObjectName("acStart")
-        self._btn_pause = QPushButton("Пауза")
-        self._btn_pause.setObjectName("acPause")
-        self._btn_stop = QPushButton("Стоп")
-        self._btn_stop.setObjectName("acStop")
-        self._btn_reset = QPushButton("Скидання")
-        self._btn_save_xy = QPushButton("Зберегти позицію курсора")
-        row.addWidget(self._btn_start)
-        row.addWidget(self._btn_pause)
-        row.addWidget(self._btn_stop)
+        row.setSpacing(4)
         row.addWidget(self._btn_reset)
         row.addWidget(self._btn_save_xy)
-        grid.addLayout(row, r, 0, 1, 2)
-        self._btn_start.clicked.connect(self._ac_start)
-        self._btn_pause.clicked.connect(self._ac_pause)
-        self._btn_stop.clicked.connect(self._ac_stop)
-        self._btn_reset.clicked.connect(self._ac_reset)
-        self._btn_save_xy.clicked.connect(self._ac_save_xy)
+        row.addStretch(1)
+        outer.addLayout(row)
         self._load_ac_mode_ui()
         self._update_ac_button_hotkey_labels()
         return w
@@ -419,6 +754,12 @@ class MainWindow(QMainWindow):
         self._ac_seq_step_idx.setValue(int(s.sequence_step_index))
         self._ac_seq_loop_inf.setChecked(bool(s.sequence_loop_infinite))
         self._ac_key_repeat.setText(s.autoclick_key_repeat_key)
+        self._ac_humanize.setChecked(s.ac_humanize_enabled)
+        self._ac_gauss_jitter.setChecked(s.ac_jitter_gaussian)
+        self._ac_pause_chance.setValue(s.ac_pause_chance_percent)
+        self._ac_pause_extra.setValue(s.ac_pause_extra_ms)
+        self._ac_micro_move.setValue(s.ac_micro_move_px)
+        self._ac_pre_click.setValue(s.ac_pre_click_delay_ms_max)
         self._ac_seq_table.setRowCount(0)
         for row in s.autoclick_sequence_steps:
             try:
@@ -440,6 +781,12 @@ class MainWindow(QMainWindow):
         self._settings.sequence_step_index = int(self._ac_seq_step_idx.value())
         self._settings.sequence_loop_infinite = self._ac_seq_loop_inf.isChecked()
         self._settings.autoclick_key_repeat_key = self._ac_key_repeat.text().strip() or "e"
+        self._settings.ac_humanize_enabled = self._ac_humanize.isChecked()
+        self._settings.ac_jitter_gaussian = self._ac_gauss_jitter.isChecked()
+        self._settings.ac_pause_chance_percent = float(self._ac_pause_chance.value())
+        self._settings.ac_pause_extra_ms = float(self._ac_pause_extra.value())
+        self._settings.ac_micro_move_px = int(self._ac_micro_move.value())
+        self._settings.ac_pre_click_delay_ms_max = float(self._ac_pre_click.value())
         steps: list[dict] = []
         for r in range(self._ac_seq_table.rowCount()):
             t0 = self._ac_seq_table.item(r, 0)
@@ -464,8 +811,8 @@ class MainWindow(QMainWindow):
     def _on_ac_work_mode_changed(self) -> None:
         idx = self._ac_work_mode.currentIndex()
         self._ac_seq_group.setVisible(idx == 1)
-        self._ac_key_repeat.setVisible(idx == 2)
-        self._ac_key_repeat_label.setVisible(idx == 2)
+        self._ac_key_repeat_card.setVisible(idx == 2)
+        self._ac_human_card.setVisible(idx == 0)
         self._sync_ac_settings_from_ui()
 
     def _ac_seq_add_row_from_step(self, st: AutoclickSequenceStep) -> None:
@@ -505,6 +852,12 @@ class MainWindow(QMainWindow):
             use_saved_position=self._ac_saved.isChecked(),
             saved_x=int(self._ac_sx.value()),
             saved_y=int(self._ac_sy.value()),
+            humanize_enabled=self._ac_humanize.isChecked(),
+            jitter_gaussian=self._ac_gauss_jitter.isChecked(),
+            pause_chance_percent=float(self._ac_pause_chance.value()),
+            pause_extra_ms=float(self._ac_pause_extra.value()),
+            micro_move_px=int(self._ac_micro_move.value()),
+            pre_click_delay_ms_max=float(self._ac_pre_click.value()),
         )
 
     def _ac_effective_interval_ms(self) -> float:
@@ -593,6 +946,12 @@ class MainWindow(QMainWindow):
         self._ac_interval_ms.setValue(100)
         self._ac_cps.setValue(5)
         self._ac_jitter.setValue(5)
+        self._ac_humanize.setChecked(False)
+        self._ac_gauss_jitter.setChecked(False)
+        self._ac_pause_chance.setValue(0)
+        self._ac_pause_extra.setValue(220)
+        self._ac_micro_move.setValue(0)
+        self._ac_pre_click.setValue(0)
 
     def _ac_save_xy(self) -> None:
         p = self._mouse_ctrl.position
@@ -611,8 +970,17 @@ class MainWindow(QMainWindow):
     def _build_macro_tab(self) -> QWidget:
         w = QWidget()
         lay = QVBoxLayout(w)
+        lay.setSpacing(6)
+        lay.setContentsMargins(0, 0, 0, 0)
+
+        c_prof, lp = self._section_card("Профіль запису", "section_profile")
         prof_row = QHBoxLayout()
-        prof_row.addWidget(QLabel("Профіль запису:"))
+        prof_row.setSpacing(10)
+        plab = QLabel("Профіль:")
+        plab.setObjectName("formInlineLabel")
+        plab.setFixedWidth(72)
+        plab.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        prof_row.addWidget(plab, 0, Qt.AlignmentFlag.AlignVCenter)
         self._macro_profile_combo = QComboBox()
         self._macro_profile_combo.currentIndexChanged.connect(self._on_macro_profile_changed)
         prof_row.addWidget(self._macro_profile_combo, 1)
@@ -622,8 +990,14 @@ class MainWindow(QMainWindow):
         self._btn_prof_save.clicked.connect(self._macro_profile_save)
         prof_row.addWidget(self._btn_prof_new)
         prof_row.addWidget(self._btn_prof_save)
-        lay.addLayout(prof_row)
+        self._register_icon_widget(self._btn_prof_new, "macro_profile_new", "toolbar")
+        self._register_icon_widget(self._btn_prof_save, "macro_profile_save", "toolbar")
+        lp.addLayout(prof_row)
+        lay.addWidget(c_prof)
+
+        c_flags, lf = self._section_card("Що записувати", "section_record_flags")
         flags = QHBoxLayout()
+        flags.setSpacing(12)
         self._chk_p_keys = QCheckBox("Клавіатура")
         self._chk_p_clicks = QCheckBox("Кліки миші")
         self._chk_p_move = QCheckBox("Рух миші")
@@ -631,9 +1005,14 @@ class MainWindow(QMainWindow):
         self._chk_p_filter = QCheckBox("Фільтр биндів")
         for c in (self._chk_p_keys, self._chk_p_clicks, self._chk_p_move, self._chk_p_scroll, self._chk_p_filter):
             flags.addWidget(c)
-        lay.addLayout(flags)
+        lf.addLayout(flags)
+        lay.addWidget(c_flags)
+
+        c_list, ll = self._section_card("Макроси та дії", "section_macros_list")
         top = QHBoxLayout()
+        top.setSpacing(12)
         self._macro_list = QListWidget()
+        self._macro_list.setMinimumHeight(112)
         self._macro_list.currentItemChanged.connect(self._macro_selected)
         self._btn_rec = QPushButton("Запис")
         self._btn_stop_rec = QPushButton("Стоп запису")
@@ -643,8 +1022,9 @@ class MainWindow(QMainWindow):
         self._btn_load_m = QPushButton("Завантажити…")
         self._btn_del_m = QPushButton("Видалити")
         self._btn_rename = QPushButton("Перейменувати")
-        top.addWidget(self._macro_list)
+        top.addWidget(self._macro_list, 1)
         col = QVBoxLayout()
+        col.setSpacing(8)
         col.addWidget(self._btn_rec)
         col.addWidget(self._btn_stop_rec)
         col.addWidget(self._btn_play)
@@ -653,9 +1033,33 @@ class MainWindow(QMainWindow):
         col.addWidget(self._btn_load_m)
         col.addWidget(self._btn_rename)
         col.addWidget(self._btn_del_m)
+        col.addStretch(1)
+        for _mb in (
+            self._btn_rec,
+            self._btn_stop_rec,
+            self._btn_play,
+            self._btn_stop_play,
+            self._btn_save_m,
+            self._btn_load_m,
+            self._btn_rename,
+            self._btn_del_m,
+        ):
+            _mb.setMinimumWidth(MACRO_SIDE_BTN_MIN_W)
+        self._register_icon_widget(self._btn_rec, "macro_record", "toolbar")
+        self._register_icon_widget(self._btn_stop_rec, "macro_stop_rec", "toolbar")
+        self._register_icon_widget(self._btn_play, "macro_play", "toolbar")
+        self._register_icon_widget(self._btn_stop_play, "macro_stop_play", "toolbar")
+        self._register_icon_widget(self._btn_save_m, "macro_save_as", "toolbar")
+        self._register_icon_widget(self._btn_load_m, "macro_load", "toolbar")
+        self._register_icon_widget(self._btn_rename, "macro_rename", "toolbar")
+        self._register_icon_widget(self._btn_del_m, "macro_delete", "toolbar")
         top.addLayout(col)
-        lay.addLayout(top)
+        ll.addLayout(top)
+        lay.addWidget(c_list)
+
+        c_rep, lr = self._section_card("Відтворення", "section_playback")
         rep = QHBoxLayout()
+        rep.setSpacing(10)
         self._macro_repeat = QComboBox()
         self._macro_repeat.addItems(["1 раз", "N раз", "Безкінечно"])
         self._macro_n = QSpinBox()
@@ -666,20 +1070,40 @@ class MainWindow(QMainWindow):
         self._macro_mult = QDoubleSpinBox()
         self._macro_mult.setRange(0.05, 20)
         self._macro_mult.setValue(1.0)
-        rep.addWidget(QLabel("Повтор"))
-        rep.addWidget(self._macro_repeat)
-        rep.addWidget(QLabel("N"))
-        rep.addWidget(self._macro_n)
-        rep.addWidget(QLabel("Швидкість"))
-        rep.addWidget(self._macro_speed)
-        rep.addWidget(QLabel("Множник"))
-        rep.addWidget(self._macro_mult)
-        lay.addLayout(rep)
+        rep.addWidget(self._pair_labeled("Повтор", self._macro_repeat, 72))
+        rep.addWidget(self._pair_labeled("N", self._macro_n, 28))
+        rep.addWidget(self._pair_labeled("Швидкість", self._macro_speed, 88))
+        rep.addWidget(self._pair_labeled("Множник", self._macro_mult, 88))
+        rep.addStretch(1)
+        lr.addLayout(rep)
+        lay.addWidget(c_rep)
+        for _mw in (self._macro_repeat, self._macro_speed):
+            self._field_max_width(_mw, FORM_COMBO_MAX_W)
+        for _mw in (self._macro_n, self._macro_mult):
+            self._field_max_width(_mw, FORM_FIELD_MAX_W)
+
         self._macro_table = QTableWidget(0, 6)
         self._macro_table.setHorizontalHeaderLabels(
             ["Тип", "Клавіша/кнопка", "Затримка (мс)", "X", "Y", "Скрол"]
         )
-        lay.addWidget(self._macro_table)
+        self._macro_table.setMinimumHeight(120)
+        self._macro_table.verticalHeader().setVisible(False)
+        self._macro_table.setAlternatingRowColors(True)
+        _mh = self._macro_table.horizontalHeader()
+        for i, mode in enumerate(
+            (
+                QHeaderView.ResizeMode.ResizeToContents,
+                QHeaderView.ResizeMode.Stretch,
+                QHeaderView.ResizeMode.ResizeToContents,
+                QHeaderView.ResizeMode.ResizeToContents,
+                QHeaderView.ResizeMode.ResizeToContents,
+                QHeaderView.ResizeMode.ResizeToContents,
+            )
+        ):
+            _mh.setSectionResizeMode(i, mode)
+        _mh.setStretchLastSection(True)
+        _mh.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        lay.addWidget(self._macro_table, 1)
         self._btn_rec.clicked.connect(self._macro_start_rec)
         self._btn_stop_rec.clicked.connect(self._macro_stop_rec)
         self._btn_play.clicked.connect(self._macro_play)
@@ -690,6 +1114,7 @@ class MainWindow(QMainWindow):
         self._btn_rename.clicked.connect(self._macro_rename)
         self._btn_apply_tbl = QPushButton("Застосувати зміни з таблиці")
         self._btn_apply_tbl.clicked.connect(self._macro_apply_table)
+        self._register_icon_widget(self._btn_apply_tbl, "action_apply", "toolbar")
         lay.addWidget(self._btn_apply_tbl)
         self._macro_table.itemChanged.connect(lambda *_: self._schedule_autosave())
         self._refresh_macro_list()
@@ -958,9 +1383,14 @@ class MainWindow(QMainWindow):
         (p / old).rename(p / new)
         self._refresh_macro_list()
 
-    def _build_binds_tab(self) -> QWidget:
+    def _build_binds_section(self) -> QWidget:
         w = QWidget()
         lay = QFormLayout(w)
+        lay.setLabelAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        lay.setFormAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        lay.setHorizontalSpacing(12)
+        lay.setVerticalSpacing(10)
+        lay.setContentsMargins(0, 2, 0, 0)
         self._bind_fields: dict[str, QLineEdit] = {}
         names = [
             ("toggle_autoclick", "Перемикач автоклікера"),
@@ -972,20 +1402,28 @@ class MainWindow(QMainWindow):
         ]
         for key, title in names:
             row = QHBoxLayout()
+            row.setSpacing(8)
             le = QLineEdit()
             le.setReadOnly(True)
             b_listen = QPushButton("Слухати")
             b_clear = QPushButton("Очистити")
+            b_listen.setMinimumWidth(108)
+            b_clear.setMinimumWidth(100)
             b_listen.clicked.connect(lambda checked=False, k=key: self._bind_listen(k))
             b_clear.clicked.connect(lambda checked=False, k=key: self._bind_clear(k))
+            self._register_icon_widget(b_listen, "action_listen", "toolbar")
+            self._register_icon_widget(b_clear, "action_clear", "toolbar")
             row.addWidget(le, 1)
             row.addWidget(b_listen)
             row.addWidget(b_clear)
-            lay.addRow(title, row)
+            rw = QWidget()
+            rw.setLayout(row)
+            lay.addRow(self._bind_row_label(title), rw)
             self._bind_fields[key] = le
         self._load_binds_to_ui()
         self._btn_apply_binds = QPushButton("Застосувати бинди")
         self._btn_apply_binds.clicked.connect(self._apply_binds_from_ui)
+        self._register_icon_widget(self._btn_apply_binds, "action_apply", "toolbar")
         lay.addRow(self._btn_apply_binds)
         return w
 
@@ -1057,8 +1495,28 @@ class MainWindow(QMainWindow):
         logging.getLogger(__name__).info("Бинди оновлено")
 
     def _build_settings_tab(self) -> QWidget:
-        w = QWidget()
-        lay = QFormLayout(w)
+        outer = QWidget()
+        outer_lay = QVBoxLayout(outer)
+        outer_lay.setContentsMargins(0, 0, 0, 0)
+        outer_lay.setSpacing(0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        inner = QWidget()
+        vl = QVBoxLayout(inner)
+        vl.setSpacing(16)
+        vl.setContentsMargins(0, 2, 8, 0)
+
+        settings_block = QWidget()
+        grid = QGridLayout(settings_block)
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(10)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setColumnStretch(1, 1)
+
         self._set_theme = QComboBox()
         self._set_theme.addItems(["Темна", "Світла"])
         self._set_theme.setCurrentIndex(0 if self._settings.theme == ThemeMode.DARK else 1)
@@ -1082,7 +1540,7 @@ class MainWindow(QMainWindow):
         self._set_overlay_op.setRange(0.3, 1.0)
         self._set_overlay_op.setSingleStep(0.05)
         self._set_overlay_op.setValue(self._settings.overlay_opacity)
-        self._set_autosave = QCheckBox("Автозбереження макросу")
+        self._set_autosave = QCheckBox("Увімкнути")
         self._set_autosave.setChecked(self._settings.autosave_macros)
         self._set_autosave_sec = QSpinBox()
         self._set_autosave_sec.setRange(5, 600)
@@ -1091,29 +1549,139 @@ class MainWindow(QMainWindow):
         self._set_log_level = QComboBox()
         self._set_log_level.addItems([x.value for x in LogLevel])
         self._set_log_level.setCurrentText(self._settings.log_level.value)
-        self._set_log_file = QCheckBox("Лог у файл")
+        self._set_log_file = QCheckBox("Увімкнути")
         self._set_log_file.setChecked(self._settings.log_to_file)
         self._set_jitter = QDoubleSpinBox()
         self._set_jitter.setRange(0, 50)
         self._set_jitter.setValue(self._settings.jitter_percent)
-        lay.addRow("Тема", self._set_theme)
-        lay.addRow("Мова (заглушка)", self._set_lang)
-        lay.addRow(self._set_top)
-        lay.addRow(self._set_sound)
-        lay.addRow(self._set_tray)
-        lay.addRow(self._set_close_tray)
-        lay.addRow("Глобальні клавіші", self._set_hk_backend)
-        lay.addRow("Прозорість оверлею", self._set_overlay_op)
-        lay.addRow(self._set_autosave)
-        lay.addRow("Інтервал автозбереження (с)", self._set_autosave_sec)
-        lay.addRow("Папка макросів (порожньо = типова)", self._set_macros_dir)
-        lay.addRow("Рівень логу", self._set_log_level)
-        lay.addRow(self._set_log_file)
-        lay.addRow("Jitter % (загальний)", self._set_jitter)
+
+        r = 0
+        grid.addWidget(
+            self._settings_lbl("Тема"),
+            r,
+            0,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+        )
+        grid.addWidget(self._set_theme, r, 1)
+        r += 1
+        grid.addWidget(
+            self._settings_lbl("Мова (заглушка)"),
+            r,
+            0,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+        )
+        grid.addWidget(self._set_lang, r, 1)
+        r += 1
+
+        ch_wrap = QWidget()
+        ch_l = QVBoxLayout(ch_wrap)
+        ch_l.setSpacing(4)
+        ch_l.setContentsMargins(0, 0, 0, 0)
+        for cx in (self._set_top, self._set_sound, self._set_tray, self._set_close_tray):
+            ch_l.addWidget(cx)
+        grid.addWidget(
+            self._settings_lbl("Поведінка"),
+            r,
+            0,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop,
+        )
+        grid.addWidget(ch_wrap, r, 1)
+        r += 1
+
+        grid.addWidget(
+            self._settings_lbl("Глобальні клавіші"),
+            r,
+            0,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+        )
+        grid.addWidget(self._set_hk_backend, r, 1)
+        r += 1
+        grid.addWidget(
+            self._settings_lbl("Прозорість оверлею"),
+            r,
+            0,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+        )
+        grid.addWidget(self._set_overlay_op, r, 1)
+        r += 1
+
+        as_row = QWidget()
+        as_h = QHBoxLayout(as_row)
+        as_h.setContentsMargins(0, 0, 0, 0)
+        as_h.setSpacing(12)
+        as_h.addWidget(self._set_autosave)
+        il_as = QLabel("Інтервал (с)")
+        il_as.setObjectName("formInlineLabel")
+        as_h.addWidget(il_as)
+        as_h.addWidget(self._set_autosave_sec)
+        as_h.addStretch(1)
+        grid.addWidget(
+            self._settings_lbl("Автозбереження макросу"),
+            r,
+            0,
+            Qt.AlignmentFlag.AlignVCenter,
+        )
+        grid.addWidget(as_row, r, 1)
+        r += 1
+
+        grid.addWidget(
+            self._settings_lbl("Папка макросів (порожньо = типова)"),
+            r,
+            0,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+        )
+        grid.addWidget(self._set_macros_dir, r, 1)
+        r += 1
+        grid.addWidget(
+            self._settings_lbl("Рівень логу"),
+            r,
+            0,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+        )
+        grid.addWidget(self._set_log_level, r, 1)
+        r += 1
+        grid.addWidget(
+            self._settings_lbl("Лог у файл"),
+            r,
+            0,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+        )
+        grid.addWidget(self._set_log_file, r, 1)
+        r += 1
+        grid.addWidget(
+            self._settings_lbl("Jitter % (загальний)"),
+            r,
+            0,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+        )
+        grid.addWidget(self._set_jitter, r, 1)
+        r += 1
+
         btn = QPushButton("Зберегти налаштування")
         btn.clicked.connect(self._save_settings_ui)
-        lay.addRow(btn)
-        return w
+        self._register_icon_widget(btn, "action_save", "toolbar")
+        grid.addWidget(btn, r, 0, 1, 2)
+
+        self._field_max_width(self._set_theme, FORM_COMBO_MAX_W)
+        self._field_max_width(self._set_hk_backend, FORM_COMBO_MAX_W)
+        self._field_max_width(self._set_overlay_op, FORM_FIELD_MAX_W)
+        self._field_max_width(self._set_autosave_sec, 120)
+        self._field_max_width(self._set_log_level, FORM_COMBO_MAX_W)
+        self._field_max_width(self._set_jitter, FORM_FIELD_MAX_W)
+
+        vl.addWidget(settings_block)
+        div = QFrame()
+        div.setObjectName("settingsSectionDivider")
+        div.setFrameShape(QFrame.Shape.HLine)
+        div.setFixedHeight(1)
+        vl.addWidget(div)
+        binds_head = QLabel("Гарячі клавіші (бинди)")
+        binds_head.setObjectName("sectionTitle")
+        vl.addWidget(binds_head)
+        vl.addWidget(self._build_binds_section())
+        scroll.setWidget(inner)
+        outer_lay.addWidget(scroll)
+        return outer
 
     def _save_settings_ui(self) -> None:
         self._settings.theme = ThemeMode.DARK if self._set_theme.currentIndex() == 0 else ThemeMode.LIGHT
@@ -1139,6 +1707,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_kb_panel"):
             self._kb_panel.set_theme(self._settings.theme)
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, self._settings.always_on_top)
+        self._apply_no_maximize_button()
         self.show()
         setup_logging(self._settings.log_level, self._settings.log_to_file, lambda m: self.append_log.emit(m))
         if self._settings.minimize_to_tray:
@@ -1152,7 +1721,20 @@ class MainWindow(QMainWindow):
     def _build_logs_tab(self) -> QWidget:
         w = QWidget()
         lay = QVBoxLayout(w)
-        lay.addWidget(QLabel("Повний лог у нижній панелі головного вікна."))
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(6)
+        head = QHBoxLayout()
+        head.setSpacing(8)
+        _log_icon = QLabel()
+        _log_icon.setObjectName("sectionTitleIcon")
+        self._register_icon_widget(_log_icon, "section_logs", "section")
+        _log_title = QLabel("Журнал подій")
+        _log_title.setObjectName("logSectionTitle")
+        head.addWidget(_log_icon, 0, Qt.AlignmentFlag.AlignVCenter)
+        head.addWidget(_log_title, 0, Qt.AlignmentFlag.AlignVCenter)
+        head.addStretch(1)
+        lay.addLayout(head)
+        lay.addWidget(self._log_edit, 1)
         return w
 
     def _build_kb_tab(self) -> QWidget:
@@ -1164,12 +1746,19 @@ class MainWindow(QMainWindow):
         lay.addWidget(self._mouse_panel, 1)
         return w
 
-    def _on_tab_changed(self, idx: int) -> None:
-        name = self._tab_bar.tabText(idx)
-        if name == "Тест клавіатури":
+    def _on_nav_id_clicked(self, idx: int) -> None:
+        self._stack.setCurrentIndex(idx)
+        self._on_nav_changed(idx)
+
+    def _on_nav_changed(self, idx: int) -> None:
+        if idx < 0:
+            return
+        if idx == _NAV_INDEX_KEYBOARD_TEST:
             self._kb_hooks.start()
+            self._kb_panel.set_layout_tracking(True)
         else:
             self._kb_hooks.stop()
+            self._kb_panel.set_layout_tracking(False)
 
     def _on_test_key(self, name: str, down: bool) -> None:
         kid = self._kb_panel.normalize(name)
@@ -1190,6 +1779,7 @@ class MainWindow(QMainWindow):
 
     def _apply_theme(self) -> None:
         self.setStyleSheet(stylesheet_for(self._settings.theme))
+        self._refresh_ui_icons()
         if hasattr(self, "_kb_panel"):
             self._kb_panel.set_theme(self._settings.theme)
 
@@ -1217,28 +1807,28 @@ class MainWindow(QMainWindow):
         self._overlay.raise_()
 
     def _refresh_status(self) -> None:
-        self._status.setProperty("state", "idle")
+        self._footer_status.setProperty("state", "idle")
         self._btn_start.setProperty("state", "")
         self._btn_pause.setProperty("state", "")
         self._btn_stop.setProperty("state", "")
         st = self._active_autoclick_state()
         ms = self._macro_engine.get_state()
         if ms == AppRunState.PLAYING_MACRO:
-            self._status.setText("Стан: відтворення макросу")
-            self._status.setProperty("state", "macro")
+            self._footer_status.setText("Стан: відтворення макросу")
+            self._footer_status.setProperty("state", "macro")
         elif st == AutoclickState.RUNNING:
-            self._status.setText("Стан: автоклікер активний")
-            self._status.setProperty("state", "running")
+            self._footer_status.setText("Стан: автоклікер активний")
+            self._footer_status.setProperty("state", "running")
             self._btn_start.setProperty("state", "on")
             self._btn_stop.setProperty("state", "danger")
         elif st == AutoclickState.PAUSED:
-            self._status.setText("Стан: пауза")
-            self._status.setProperty("state", "paused")
+            self._footer_status.setText("Стан: пауза")
+            self._footer_status.setProperty("state", "paused")
             self._btn_pause.setProperty("state", "paused")
             self._btn_stop.setProperty("state", "danger")
         else:
-            self._status.setText("Стан: зупинено")
-        for w in (self._status, self._btn_start, self._btn_pause, self._btn_stop):
+            self._footer_status.setText("Стан: зупинено")
+        for w in (self._footer_status, self._btn_start, self._btn_pause, self._btn_stop):
             w.style().unpolish(w)
             w.style().polish(w)
         self._update_overlay_visibility()
@@ -1364,8 +1954,12 @@ class MainWindow(QMainWindow):
         return super().nativeEvent(eventType, message)
 
     def changeEvent(self, event: QEvent) -> None:
-        if event.type() == QEvent.Type.WindowStateChange and self._settings.minimize_to_tray:
-            if self.isMinimized():
+        if event.type() == QEvent.Type.WindowStateChange:
+            if self.windowState() & Qt.WindowState.WindowMaximized:
+                self.showNormal()
+                event.accept()
+                return
+            if self._settings.minimize_to_tray and self.isMinimized():
                 self.hide()
                 self._tray.ensure_visible()
                 event.accept()
@@ -1387,6 +1981,7 @@ class MainWindow(QMainWindow):
         self._seq_autoclick.stop()
         self._macro_engine.stop()
         self._kb_hooks.stop()
+        self._kb_panel.set_layout_tracking(False)
         self._overlay.hide()
         if self._capture:
             self._capture.stop()

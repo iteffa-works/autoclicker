@@ -2,8 +2,23 @@
 
 from __future__ import annotations
 
+import sys
+
 from pynput import keyboard, mouse
 from PySide6.QtCore import QObject, Signal
+
+
+def _pynput_key_to_id(key: keyboard.Key) -> str:
+    name = key.name or str(key)
+    aliases = {
+        "alt_l": "alt",
+        "alt_gr": "alt_r",
+        "shift_l": "shift",
+        "ctrl": "ctrl_l",
+        "return": "enter",
+        "cmd_l": "cmd",
+    }
+    return aliases.get(name, name)
 
 
 class KeyboardTestHooks(QObject):
@@ -54,13 +69,29 @@ class KeyboardTestHooks(QObject):
 
     def _emit_key(self, key: keyboard.Key | keyboard.KeyCode | None, down: bool) -> None:
         if isinstance(key, keyboard.Key):
-            name = key.name or str(key)
-        else:
-            try:
-                name = key.char if key and getattr(key, "char", None) else f"vk{key.vk}"
-            except Exception:
-                name = "unknown"
-        self.key_event.emit(str(name), down)
+            self.key_event.emit(_pynput_key_to_id(key), down)
+            return
+        if isinstance(key, keyboard.KeyCode):
+            vk = getattr(key, "vk", None)
+            if vk is not None and sys.platform == "win32":
+                from app.ui.keyboard_vk_map import vk_to_key_id
+
+                kid = vk_to_key_id(vk)
+                if kid:
+                    self.key_event.emit(kid, down)
+                    return
+            ch = getattr(key, "char", None)
+            if ch and len(ch) == 1:
+                cl = ch.lower()
+                if "a" <= cl <= "z":
+                    self.key_event.emit(cl, down)
+                    return
+            if vk is not None:
+                self.key_event.emit(f"vk{vk}", down)
+            else:
+                self.key_event.emit("unknown", down)
+            return
+        self.key_event.emit("unknown", down)
 
     def stop(self) -> None:
         for lst in (self._k, self._m):

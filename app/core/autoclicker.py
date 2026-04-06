@@ -37,6 +37,13 @@ class AutoclickConfig:
     use_saved_position: bool = False
     saved_x: int = 0
     saved_y: int = 0
+    # Варіативність інтервалів (не гарантує обхід захисту сторонніх програм)
+    humanize_enabled: bool = False
+    jitter_gaussian: bool = False
+    pause_chance_percent: float = 0.0
+    pause_extra_ms: float = 220.0
+    micro_move_px: int = 0
+    pre_click_delay_ms_max: float = 0.0
 
 
 def _button_to_pynput(b: MouseButtonChoice) -> Button:
@@ -117,7 +124,16 @@ class AutoclickerEngine:
             base = 1000.0 / cps
         j = max(0.0, float(cfg.jitter_ms))
         if j > 0:
-            base += self._rng.uniform(-j, j)
+            if cfg.jitter_gaussian:
+                sigma = j / 2.6
+                base += self._rng.gauss(0.0, sigma)
+            else:
+                base += self._rng.uniform(-j, j)
+        if cfg.humanize_enabled:
+            pc = max(0.0, min(100.0, float(cfg.pause_chance_percent)))
+            if pc > 0 and self._rng.uniform(0, 100) < pc:
+                extra = max(0.0, float(cfg.pause_extra_ms))
+                base += self._rng.uniform(15.0, max(15.0, extra))
         return max(0.0, base) / 1000.0
 
     def _run(self) -> None:
@@ -128,6 +144,13 @@ class AutoclickerEngine:
             try:
                 if cfg0.use_saved_position:
                     self._mouse.position = (int(cfg0.saved_x), int(cfg0.saved_y))
+                elif cfg0.micro_move_px > 0:
+                    p = int(cfg0.micro_move_px)
+                    px, py = self._mouse.position
+                    self._mouse.position = (
+                        int(px + self._rng.randint(-p, p)),
+                        int(py + self._rng.randint(-p, p)),
+                    )
                 self._mouse.press(btn)
                 with self._lock:
                     self._hold_button = btn
@@ -168,6 +191,16 @@ class AutoclickerEngine:
     def _perform_click(self, cfg: AutoclickConfig, btn: Button) -> None:
         if cfg.use_saved_position:
             self._mouse.position = (int(cfg.saved_x), int(cfg.saved_y))
+        elif cfg.micro_move_px > 0:
+            p = int(cfg.micro_move_px)
+            px, py = self._mouse.position
+            self._mouse.position = (
+                int(px + self._rng.randint(-p, p)),
+                int(py + self._rng.randint(-p, p)),
+            )
+        pm = max(0.0, float(cfg.pre_click_delay_ms_max))
+        if pm > 0:
+            time.sleep(self._rng.uniform(0.0, pm / 1000.0))
         if cfg.mode == ClickMode.SINGLE:
             self._mouse.click(btn, 1)
         elif cfg.mode == ClickMode.DOUBLE:

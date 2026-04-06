@@ -4,6 +4,8 @@
 import sys
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_data_files
+
 root = Path(SPECPATH).resolve()
 
 block_cipher = None
@@ -18,8 +20,9 @@ a = Analysis(
         (str(root / "data" / "macros" / "example_macro.json"), "data/macros"),
         (str(root / "assets" / "icons"), "assets/icons"),
         (str(root / "assets" / "images"), "assets/images"),
-    ],
-    hiddenimports=["pynput.keyboard._win32", "pynput.mouse._win32"],
+    ]
+    + collect_data_files("qtawesome"),
+    hiddenimports=["pynput.keyboard._win32", "pynput.mouse._win32", "qtawesome"],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

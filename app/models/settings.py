@@ -61,6 +61,12 @@ class AppSettings:
     sequence_repeat_mode: str = SequenceRepeatMode.FULL.value
     sequence_step_index: int = 0
     sequence_loop_infinite: bool = True
+    ac_humanize_enabled: bool = False
+    ac_jitter_gaussian: bool = False
+    ac_pause_chance_percent: float = 0.0
+    ac_pause_extra_ms: float = 220.0
+    ac_micro_move_px: int = 0
+    ac_pre_click_delay_ms_max: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -94,6 +100,12 @@ class AppSettings:
             "sequence_repeat_mode": self.sequence_repeat_mode,
             "sequence_step_index": self.sequence_step_index,
             "sequence_loop_infinite": self.sequence_loop_infinite,
+            "ac_humanize_enabled": self.ac_humanize_enabled,
+            "ac_jitter_gaussian": self.ac_jitter_gaussian,
+            "ac_pause_chance_percent": self.ac_pause_chance_percent,
+            "ac_pause_extra_ms": self.ac_pause_extra_ms,
+            "ac_micro_move_px": self.ac_micro_move_px,
+            "ac_pre_click_delay_ms_max": self.ac_pre_click_delay_ms_max,
         }
 
     @classmethod
@@ -142,4 +154,10 @@ class AppSettings:
             sequence_repeat_mode=str(data.get("sequence_repeat_mode", SequenceRepeatMode.FULL.value)),
             sequence_step_index=int(data.get("sequence_step_index", 0)),
             sequence_loop_infinite=bool(data.get("sequence_loop_infinite", True)),
+            ac_humanize_enabled=bool(data.get("ac_humanize_enabled", False)),
+            ac_jitter_gaussian=bool(data.get("ac_jitter_gaussian", False)),
+            ac_pause_chance_percent=float(data.get("ac_pause_chance_percent", 0.0)),
+            ac_pause_extra_ms=float(data.get("ac_pause_extra_ms", 220.0)),
+            ac_micro_move_px=int(data.get("ac_micro_move_px", 0)),
+            ac_pre_click_delay_ms_max=float(data.get("ac_pre_click_delay_ms_max", 0.0)),
         )

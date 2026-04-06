@@ -15,6 +15,8 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+Іконки в інтерфейсі: **Font Awesome 5 Free (Solid)** через [qtawesome](https://github.com/spyder-ide/qtawesome) (ліцензія іконок — [Font Awesome Free](https://fontawesome.com/license/free)).
+
 Для збірки додатково: `pip install pyinstaller` або `pip install -e ".[dev]"` з `pyproject.toml`.
 
 ## Запуск з коду
