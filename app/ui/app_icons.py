@@ -63,6 +63,10 @@ _ICON_MAP: dict[str, str] = {
     "section_macros_list": "fa5s.folder-open",
     "section_playback": "fa5s.play-circle",
     "section_logs": "fa5s.stream",
+    # Діагностика (вкладка тесту клавіатури)
+    "diag_mouse": "fa5s.mouse",
+    "diag_coords": "fa5s.crosshairs",
+    "diag_scroll": "fa5s.arrows-alt-v",
 }
 
 # Pixel sizes (width = height)

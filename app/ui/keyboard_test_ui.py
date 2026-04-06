@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from app.models.settings import ThemeMode
 from app.ui import design_tokens as DT
+from app.ui.app_icons import app_icon
 from app.ui.keyboard_vk_map import KEY_ID_TO_VK_LAYOUT_ONLY
 from app.ui.theme import (
     KeyboardKeycapStyles,
@@ -571,106 +572,158 @@ class KeyboardTestPanel(QWidget):
 
 
 class MouseTestPanel(QWidget):
+    _ICON_HEADER_PX = 18
+
     def __init__(self, theme: ThemeMode) -> None:
         super().__init__()
         self._theme = theme
         self._down = {"left": False, "right": False, "middle": False}
+        self._header_icons: list[tuple[str, QLabel]] = []
 
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(DT.S16)
+        root.setSpacing(DT.S12)
 
-        card_mouse = QFrame()
-        card_mouse.setObjectName("kbTestCard")
-        cm = QVBoxLayout(card_mouse)
-        cm.setContentsMargins(DT.S16, DT.S16, DT.S16, DT.S16)
-        cm.setSpacing(DT.S8)
-        t1 = QLabel("Миша")
-        t1.setObjectName("kbTestCardTitle")
+        row = QHBoxLayout()
+        row.setSpacing(DT.S12)
+        row.setContentsMargins(0, 0, 0, 0)
         self._pill_l = QLabel("відпущено")
         self._pill_r = QLabel("відпущено")
         self._pill_m = QLabel("відпущено")
         for p in (self._pill_l, self._pill_r, self._pill_m):
             p.setObjectName("mouseTestPill")
-        row_btns = QHBoxLayout()
-        row_btns.setSpacing(DT.S8)
-        lb_l = QLabel("ЛКМ")
-        lb_l.setObjectName("mouseTestLbl")
-        lb_r = QLabel("ПКМ")
-        lb_r.setObjectName("mouseTestLbl")
-        lb_m = QLabel("СКМ")
-        lb_m.setObjectName("mouseTestLbl")
-        row_btns.addWidget(lb_l)
-        row_btns.addWidget(self._pill_l, 1)
-        row_btns.addWidget(lb_r)
-        row_btns.addWidget(self._pill_r, 1)
-        row_btns.addWidget(lb_m)
-        row_btns.addWidget(self._pill_m, 1)
-        cm.addWidget(t1)
-        cm.addLayout(row_btns)
-
-        card_xy = QFrame()
-        card_xy.setObjectName("kbTestCard")
-        cx = QVBoxLayout(card_xy)
-        cx.setContentsMargins(DT.S16, DT.S16, DT.S16, DT.S16)
-        cx.setSpacing(DT.S8)
-        t2 = QLabel("Координати")
-        t2.setObjectName("kbTestCardTitle")
-        g = QGridLayout()
-        g.setHorizontalSpacing(DT.S16)
-        g.setVerticalSpacing(4)
-        lx = QLabel("X")
-        lx.setObjectName("mouseCoordLabel")
-        ly = QLabel("Y")
-        ly.setObjectName("mouseCoordLabel")
         self._lbl_x = QLabel("0")
         self._lbl_y = QLabel("0")
-        self._lbl_x.setObjectName("mouseCoordValue")
-        self._lbl_y.setObjectName("mouseCoordValue")
-        g.addWidget(lx, 0, 0)
-        g.addWidget(self._lbl_x, 0, 1)
-        g.addWidget(ly, 1, 0)
-        g.addWidget(self._lbl_y, 1, 1)
-        cx.addWidget(t2)
-        cx.addLayout(g)
-
-        card_sc = QFrame()
-        card_sc.setObjectName("kbTestCard")
-        cs = QVBoxLayout(card_sc)
-        cs.setContentsMargins(DT.S16, DT.S16, DT.S16, DT.S16)
-        cs.setSpacing(DT.S8)
-        t3 = QLabel("Скрол")
-        t3.setObjectName("kbTestCardTitle")
-        row_s = QHBoxLayout()
-        row_s.setSpacing(DT.S16)
+        self._lbl_x.setObjectName("mouseMetricValueCoords")
+        self._lbl_y.setObjectName("mouseMetricValueCoords")
         self._lbl_dx = QLabel("0")
         self._lbl_dy = QLabel("0")
-        self._lbl_dx.setObjectName("mouseScrollValue")
-        self._lbl_dy.setObjectName("mouseScrollValue")
-        dl = QLabel("dx")
-        dl.setObjectName("mouseScrollLabel")
-        dr = QLabel("dy")
-        dr.setObjectName("mouseScrollLabel")
-        row_s.addWidget(dl)
-        row_s.addWidget(self._lbl_dx)
-        row_s.addWidget(dr)
-        row_s.addWidget(self._lbl_dy)
-        row_s.addStretch(1)
-        cs.addWidget(t3)
-        cs.addLayout(row_s)
+        self._lbl_dx.setObjectName("mouseMetricValueScroll")
+        self._lbl_dy.setObjectName("mouseMetricValueScroll")
 
-        root.addWidget(card_mouse)
-        root.addWidget(card_xy)
-        root.addWidget(card_sc)
+        row.addWidget(self._build_card_mouse(), 1)
+        row.addWidget(self._build_card_coords(), 1)
+        row.addWidget(self._build_card_scroll(), 1)
+        root.addLayout(row)
 
         self.set_theme(theme)
+
+    def _diag_header(self, title: str, icon_key: str) -> QWidget:
+        w = QWidget()
+        w.setObjectName("kbDiagHeader")
+        h = QHBoxLayout(w)
+        h.setContentsMargins(DT.S12, 10, DT.S12, 10)
+        h.setSpacing(DT.S8)
+        ic = QLabel()
+        ic.setObjectName("kbDiagHeaderIcon")
+        ic.setFixedSize(self._ICON_HEADER_PX, self._ICON_HEADER_PX)
+        ic.setPixmap(app_icon(icon_key, self._theme).pixmap(self._ICON_HEADER_PX, self._ICON_HEADER_PX))
+        self._header_icons.append((icon_key, ic))
+        tit = QLabel(title)
+        tit.setObjectName("kbDiagTitle")
+        tit.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
+        h.addWidget(ic, 0, Qt.AlignmentFlag.AlignVCenter)
+        h.addWidget(tit, 0, Qt.AlignmentFlag.AlignVCenter)
+        h.addStretch(1)
+        return w
+
+    def _build_card_mouse(self) -> QFrame:
+        card = QFrame()
+        card.setObjectName("kbTestCard")
+        card.setMinimumHeight(148)
+        v = QVBoxLayout(card)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+        v.addWidget(self._diag_header("Миша", "diag_mouse"))
+        body = QWidget()
+        body.setObjectName("kbDiagBody")
+        vb = QVBoxLayout(body)
+        vb.setContentsMargins(DT.S12, DT.S12, DT.S12, DT.S12)
+        vb.setSpacing(0)
+        hrow = QHBoxLayout()
+        hrow.setSpacing(DT.S8)
+        for name, pill in (
+            ("ЛКМ", self._pill_l),
+            ("ПКМ", self._pill_r),
+            ("СКМ", self._pill_m),
+        ):
+            cell = QFrame()
+            cell.setObjectName("mouseDiagCell")
+            cv = QVBoxLayout(cell)
+            cv.setContentsMargins(10, 10, 10, 10)
+            cv.setSpacing(DT.S8)
+            lb = QLabel(name)
+            lb.setObjectName("mouseDiagKeyLbl")
+            lb.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            cv.addWidget(lb, 0, Qt.AlignmentFlag.AlignHCenter)
+            cv.addWidget(pill, 0, Qt.AlignmentFlag.AlignHCenter)
+            hrow.addWidget(cell, 1)
+        vb.addLayout(hrow)
+        v.addWidget(body, 1)
+        return card
+
+    def _metric_box(self, dim: str, value: QLabel) -> QFrame:
+        f = QFrame()
+        f.setObjectName("mouseMetricBox")
+        lay = QVBoxLayout(f)
+        lay.setContentsMargins(10, 10, 10, 10)
+        lay.setSpacing(4)
+        d = QLabel(dim)
+        d.setObjectName("mouseMetricDimLbl")
+        value.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        lay.addWidget(d)
+        lay.addWidget(value)
+        return f
+
+    def _build_card_coords(self) -> QFrame:
+        card = QFrame()
+        card.setObjectName("kbTestCard")
+        card.setMinimumHeight(148)
+        v = QVBoxLayout(card)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+        v.addWidget(self._diag_header("Координати", "diag_coords"))
+        body = QWidget()
+        body.setObjectName("kbDiagBody")
+        vb = QVBoxLayout(body)
+        vb.setContentsMargins(DT.S12, DT.S12, DT.S12, DT.S12)
+        hrow = QHBoxLayout()
+        hrow.setSpacing(DT.S8)
+        hrow.addWidget(self._metric_box("X", self._lbl_x), 1)
+        hrow.addWidget(self._metric_box("Y", self._lbl_y), 1)
+        vb.addLayout(hrow)
+        v.addWidget(body, 1)
+        return card
+
+    def _build_card_scroll(self) -> QFrame:
+        card = QFrame()
+        card.setObjectName("kbTestCard")
+        card.setMinimumHeight(148)
+        v = QVBoxLayout(card)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+        v.addWidget(self._diag_header("Скрол", "diag_scroll"))
+        body = QWidget()
+        body.setObjectName("kbDiagBody")
+        vb = QVBoxLayout(body)
+        vb.setContentsMargins(DT.S12, DT.S12, DT.S12, DT.S12)
+        hrow = QHBoxLayout()
+        hrow.setSpacing(DT.S8)
+        hrow.addWidget(self._metric_box("dx", self._lbl_dx), 1)
+        hrow.addWidget(self._metric_box("dy", self._lbl_dy), 1)
+        vb.addLayout(hrow)
+        v.addWidget(body, 1)
+        return card
 
     def set_theme(self, theme: ThemeMode) -> None:
         self._theme = theme
         ss = mouse_test_panel_styles(theme)
         self.setStyleSheet(ss)
+        px = self._ICON_HEADER_PX
+        for key, lbl in self._header_icons:
+            lbl.setPixmap(app_icon(key, theme).pixmap(px, px))
         self._apply_pills()
 
     def _apply_pills(self) -> None:

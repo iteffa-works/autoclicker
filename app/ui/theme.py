@@ -1068,35 +1068,58 @@ def keyboard_keycap_styles(theme: ThemeMode) -> KeyboardKeycapStyles:
 
 
 def mouse_test_panel_styles(theme: ThemeMode) -> str:
-    """Три картки праворуч: миша, координати, скрол."""
+    """Діагностичні картки: миша, координати, скрол (єдина система)."""
+    mono = "'Cascadia Mono', 'Consolas', 'Courier New', monospace"
     if theme == ThemeMode.DARK:
         card = T.D_BG_SURFACE
+        inner = T.D_BG_ELEVATED
         b = T.D_BORDER_SUBTLE
+        hb = "rgba(51, 65, 85, 0.55)"
         tp, ts = T.D_TEXT_PRIMARY, T.D_TEXT_SECONDARY
         ac = T.KB_TEST_ACCENT
-        mono = "'Cascadia Mono', 'Consolas', 'Courier New', monospace"
         return (
-            f"QFrame#kbTestCard {{ background: {card}; border: none; border-radius: 10px; padding: 0px; }}"
-            f"QLabel#kbTestCardTitle {{ color: {tp}; font-size: 14px; font-weight: 600; padding: 0 0 4px 0; }}"
-            f"QLabel#mouseCoordValue {{ color: {ac}; font-size: 18px; font-weight: 600; font-family: {mono}; }}"
-            f"QLabel#mouseCoordLabel {{ color: {ts}; font-size: 11px; font-weight: 500; }}"
-            f"QLabel#mouseScrollValue {{ color: {tp}; font-size: 13px; font-family: {mono}; }}"
-            f"QLabel#mouseScrollLabel {{ color: {ts}; font-size: 11px; }}"
-            f"QLabel#mouseTestLbl {{ color: {ts}; font-size: 11px; min-width: 32px; }}"
+            f"QFrame#kbTestCard {{ background-color: {card}; border: 1px solid {b}; border-radius: 12px; padding: 0px; }}"
+            f"QWidget#kbDiagHeader {{ background-color: transparent; border: none; "
+            f"border-bottom: 1px solid {hb}; }}"
+            f"QLabel#kbDiagHeaderIcon {{ background-color: transparent; border: none; }}"
+            f"QLabel#kbDiagTitle {{ color: {tp}; background-color: transparent; border: none; "
+            f"font-size: 13px; font-weight: 600; padding: 0px; }}"
+            f"QWidget#kbDiagBody {{ background-color: transparent; }}"
+            f"QFrame#mouseDiagCell {{ background-color: {inner}; border: 1px solid {b}; border-radius: 8px; }}"
+            f"QFrame#mouseMetricBox {{ background-color: {inner}; border: 1px solid {b}; border-radius: 8px; }}"
+            f"QLabel#mouseDiagKeyLbl {{ color: {ts}; background-color: transparent; border: none; "
+            f"font-size: 11px; font-weight: 600; letter-spacing: 0.02em; }}"
+            f"QLabel#mouseMetricDimLbl {{ color: {ts}; background-color: transparent; border: none; "
+            f"font-size: 11px; font-weight: 500; }}"
+            f"QLabel#mouseMetricValueCoords {{ color: {ac}; background-color: transparent; border: none; "
+            f"font-size: 18px; font-weight: 600; font-family: {mono}; padding: 2px 0px 0px 0px; }}"
+            f"QLabel#mouseMetricValueScroll {{ color: {tp}; background-color: transparent; border: none; "
+            f"font-size: 16px; font-weight: 600; font-family: {mono}; padding: 2px 0px 0px 0px; }}"
         )
-    card = T.L_KB_TEST_PLATE
+    inner = T.L_BG_SURFACE2
     b = T.L_BORDER_SUBTLE
+    hb = "rgba(148, 163, 184, 0.45)"
     tp, ts = T.L_TEXT_PRIMARY, T.L_TEXT_SECONDARY
     ac = T.L_KB_TEST_ACCENT
-    mono = "'Cascadia Mono', 'Consolas', 'Courier New', monospace"
+    card_bg = T.L_KB_TEST_PLATE
     return (
-        f"QFrame#kbTestCard {{ background: {card}; border: 1px solid {b}; border-radius: 10px; padding: 0px; }}"
-        f"QLabel#kbTestCardTitle {{ color: {tp}; font-size: 14px; font-weight: 600; padding: 0 0 4px 0; }}"
-        f"QLabel#mouseCoordValue {{ color: {ac}; font-size: 18px; font-weight: 600; font-family: {mono}; }}"
-        f"QLabel#mouseCoordLabel {{ color: {ts}; font-size: 11px; font-weight: 500; }}"
-        f"QLabel#mouseScrollValue {{ color: {tp}; font-size: 13px; font-family: {mono}; }}"
-        f"QLabel#mouseScrollLabel {{ color: {ts}; font-size: 11px; }}"
-        f"QLabel#mouseTestLbl {{ color: {ts}; font-size: 11px; min-width: 32px; }}"
+        f"QFrame#kbTestCard {{ background-color: {card_bg}; border: 1px solid {b}; border-radius: 12px; padding: 0px; }}"
+        f"QWidget#kbDiagHeader {{ background-color: transparent; border: none; "
+        f"border-bottom: 1px solid {hb}; }}"
+        f"QLabel#kbDiagHeaderIcon {{ background-color: transparent; border: none; }}"
+        f"QLabel#kbDiagTitle {{ color: {tp}; background-color: transparent; border: none; "
+        f"font-size: 13px; font-weight: 600; padding: 0px; }}"
+        f"QWidget#kbDiagBody {{ background-color: transparent; }}"
+        f"QFrame#mouseDiagCell {{ background-color: {inner}; border: 1px solid {b}; border-radius: 8px; }}"
+        f"QFrame#mouseMetricBox {{ background-color: {inner}; border: 1px solid {b}; border-radius: 8px; }}"
+        f"QLabel#mouseDiagKeyLbl {{ color: {ts}; background-color: transparent; border: none; "
+        f"font-size: 11px; font-weight: 600; letter-spacing: 0.02em; }}"
+        f"QLabel#mouseMetricDimLbl {{ color: {ts}; background-color: transparent; border: none; "
+        f"font-size: 11px; font-weight: 500; }}"
+        f"QLabel#mouseMetricValueCoords {{ color: {ac}; background-color: transparent; border: none; "
+        f"font-size: 18px; font-weight: 600; font-family: {mono}; padding: 2px 0px 0px 0px; }}"
+        f"QLabel#mouseMetricValueScroll {{ color: {tp}; background-color: transparent; border: none; "
+        f"font-size: 16px; font-weight: 600; font-family: {mono}; padding: 2px 0px 0px 0px; }}"
     )
 
 
