@@ -86,7 +86,6 @@ from app.ui.design_tokens import (
     FORM_FIELD_MAX_W,
     FORM_LABEL_MIN_W,
     MACRO_SIDE_BTN_MIN_W,
-    MAX_CONTENT_WIDTH,
     S16,
     S24,
     WINDOW_HEIGHT,
@@ -457,7 +456,6 @@ class MainWindow(QMainWindow):
         sil.addWidget(self._stack, 1)
 
         center = QWidget()
-        center.setMaximumWidth(MAX_CONTENT_WIDTH)
         center.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         c_lay = QVBoxLayout(center)
         c_lay.setContentsMargins(0, 0, 0, 0)
@@ -466,9 +464,7 @@ class MainWindow(QMainWindow):
         wrap_row = QWidget()
         wrap_lay = QHBoxLayout(wrap_row)
         wrap_lay.setContentsMargins(0, 0, 0, 0)
-        wrap_lay.addStretch(1)
-        wrap_lay.addWidget(center)
-        wrap_lay.addStretch(1)
+        wrap_lay.addWidget(center, 1)
 
         content_area = QWidget()
         content_area.setObjectName("contentArea")

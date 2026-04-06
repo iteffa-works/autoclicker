@@ -8,15 +8,12 @@ S16 = 16
 S24 = 24
 S32 = 32
 
-# Main window (fixed, no resize): fits stacked UI + log without outer scroll
-WINDOW_WIDTH = 1080
-WINDOW_HEIGHT = 940
+# Main window (fixed, no resize)
+WINDOW_WIDTH = 1600
+WINDOW_HEIGHT = 900
 
-# Max width for centered content column
-MAX_CONTENT_WIDTH = 1120
-
-# Main column padding (content + журнал)
-CONTENT_PADDING = 4
+# Outer padding головної області контенту
+CONTENT_PADDING = 16
 
 # Form rows: label column + capped control width (avoid overstretched inputs)
 FORM_LABEL_MIN_W = 140
