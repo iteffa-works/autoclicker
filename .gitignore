@@ -56,3 +56,4 @@ Desktop.ini
 # Логи
 *.log
 logs/
+data/macros/
