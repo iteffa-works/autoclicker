@@ -30,7 +30,7 @@ AC_GRID_LABEL_W = 120
 # Підписи рядків биндів (одна колонка)
 BINDS_LABEL_MIN_W = 190
 # Кнопки стовпчика «Макроси» — однакова ширина
-MACRO_SIDE_BTN_MIN_W = 200
+MACRO_SIDE_BTN_MIN_W = 128
 
 # --- Dark (primary) ---
 D_BG_APP = "#0F172A"

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import qtawesome as qta
 
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QPixmap
 
 from app.models.settings import ThemeMode
 from app.ui import design_tokens as T
@@ -47,6 +47,7 @@ _ICON_MAP: dict[str, str] = {
     "macro_load": "fa5s.folder-open",
     "macro_delete": "fa5s.trash-alt",
     "macro_rename": "fa5s.edit",
+    "macro_preview": "fa5s.eye",
     "macro_profile_new": "fa5s.plus",
     "macro_profile_save": "fa5s.save",
     # Section headers
@@ -68,6 +69,8 @@ _ICON_MAP: dict[str, str] = {
 ICON_SIZE_NAV = 16
 ICON_SIZE_TOOLBAR = 18
 ICON_SIZE_SECTION = 18
+# QCheckBox::indicator:checked — QSS приймає лише url(); збираємо pixmap з Font Awesome (qtawesome).
+CHECKBOX_INDICATOR_PX = 18
 
 _KIND_TO_SIZE = {
     "nav": ICON_SIZE_NAV,
@@ -87,3 +90,25 @@ def _icon_color(theme: ThemeMode) -> str:
 def app_icon(key: str, theme: ThemeMode) -> QIcon:
     fa = _ICON_MAP.get(key, "fa5s.circle")
     return qta.icon(fa, color=_icon_color(theme))
+
+
+def checkbox_checked_pixmap(theme: ThemeMode) -> QPixmap:
+    """Зелений «увімкнено»: квадрат + галочка (два шари fa5s)."""
+    s = CHECKBOX_INDICATOR_PX
+    if theme == ThemeMode.DARK:
+        return qta.icon(
+            "fa5s.square",
+            "fa5s.check",
+            options=[
+                {"color": T.D_STATE_SUCCESS, "scale_factor": 1.0},
+                {"color": "#FFFFFF", "scale_factor": 0.55},
+            ],
+        ).pixmap(s, s)
+    return qta.icon(
+        "fa5s.square",
+        "fa5s.check",
+        options=[
+            {"color": "#DCFCE7", "scale_factor": 1.0},
+            {"color": "#166534", "scale_factor": 0.55},
+        ],
+    ).pixmap(s, s)

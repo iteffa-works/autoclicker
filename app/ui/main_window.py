@@ -230,20 +230,34 @@ class MainWindow(QMainWindow):
         lm.setSpacing(4)
         self._btn_macro_play = QPushButton(_ICON_TEXT_GAP + "Відтворити")
         self._btn_macro_rec = QPushButton(_ICON_TEXT_GAP + "Запис")
+        self._btn_macro_stop_rec = QPushButton(_ICON_TEXT_GAP + "Стоп запису")
         self._btn_macro_stop_play = QPushButton(_ICON_TEXT_GAP + "Стоп відтворення")
-        for _mb in (self._btn_macro_play, self._btn_macro_rec, self._btn_macro_stop_play):
+        for _mb in (
+            self._btn_macro_play,
+            self._btn_macro_rec,
+            self._btn_macro_stop_rec,
+            self._btn_macro_stop_play,
+        ):
             _mb.setObjectName("headerActionButton")
             _mb.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
         self._btn_macro_play.clicked.connect(self._macro_play)
         self._btn_macro_rec.clicked.connect(self._macro_start_rec)
+        self._btn_macro_stop_rec.clicked.connect(self._macro_stop_rec)
         self._btn_macro_stop_play.clicked.connect(self._macro_stop_play)
         self._register_icon_widget(self._btn_macro_play, "macro_play", "toolbar")
         self._register_icon_widget(self._btn_macro_rec, "macro_record", "toolbar")
+        self._register_icon_widget(self._btn_macro_stop_rec, "macro_stop_rec", "toolbar")
         self._register_icon_widget(self._btn_macro_stop_play, "macro_stop_play", "toolbar")
         lm.addWidget(self._btn_macro_play)
         lm.addWidget(self._btn_macro_rec)
+        lm.addWidget(self._btn_macro_stop_rec)
         lm.addWidget(self._btn_macro_stop_play)
         st.addWidget(w_macro)
+        # Єдині екземпляри кнопок запису/відтворення (вкладка макросів не дублює)
+        self._btn_play = self._btn_macro_play
+        self._btn_rec = self._btn_macro_rec
+        self._btn_stop_play = self._btn_macro_stop_play
+        self._btn_stop_rec = self._btn_macro_stop_rec
 
         st.addWidget(QWidget())
 
@@ -274,6 +288,8 @@ class MainWindow(QMainWindow):
         self._log_edit.setObjectName("eventLog")
         self._log_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
+        self._header_actions_stack = self._create_header_actions_stack()
+
         self._stack = QStackedWidget()
         self._stack.setObjectName("mainStack")
         self._stack.addWidget(self._build_autoclick_tab())
@@ -281,8 +297,6 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(self._build_kb_tab())
         self._stack.addWidget(self._build_settings_tab())
         self._stack.addWidget(self._build_logs_tab())
-
-        self._header_actions_stack = self._create_header_actions_stack()
 
         header = QWidget()
         header.setObjectName("headerBar")
@@ -536,18 +550,22 @@ class MainWindow(QMainWindow):
         card = QFrame()
         card.setObjectName("contentCard")
         lay = QVBoxLayout(card)
-        lay.setSpacing(5)
+        lay.setSpacing(4)
         lay.setContentsMargins(6, 6, 6, 6)
         if title:
             if icon_key:
                 head = QHBoxLayout()
-                head.setSpacing(6)
+                head.setContentsMargins(0, 0, 0, 0)
+                head.setSpacing(8)
                 il = QLabel()
                 il.setObjectName("sectionTitleIcon")
-                il.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                il.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+                il.setAutoFillBackground(False)
                 self._register_icon_widget(il, icon_key, "section")
                 tl = QLabel(title)
                 tl.setObjectName("sectionTitle")
+                tl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+                tl.setAutoFillBackground(False)
                 head.addWidget(il, 0, Qt.AlignmentFlag.AlignVCenter)
                 head.addWidget(tl, 0, Qt.AlignmentFlag.AlignVCenter)
                 head.addStretch(1)
@@ -555,6 +573,8 @@ class MainWindow(QMainWindow):
             else:
                 tl = QLabel(title)
                 tl.setObjectName("sectionTitle")
+                tl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+                tl.setAutoFillBackground(False)
                 lay.addWidget(tl)
         return card, lay
 
@@ -1067,45 +1087,31 @@ class MainWindow(QMainWindow):
 
         c_list, ll = self._section_card("Макроси та дії", "section_macros_list")
         top = QHBoxLayout()
-        top.setSpacing(12)
+        top.setContentsMargins(0, 0, 0, 0)
+        top.setSpacing(8)
         self._macro_list = QListWidget()
+        self._macro_list.setObjectName("macroFileList")
         self._macro_list.setMinimumHeight(112)
-        self._macro_list.currentItemChanged.connect(self._macro_selected)
-        self._btn_rec = QPushButton("Запис")
-        self._btn_stop_rec = QPushButton("Стоп запису")
-        self._btn_play = QPushButton("Відтворити")
-        self._btn_stop_play = QPushButton("Стоп відтворення")
+        self._btn_macro_preview = QPushButton(_ICON_TEXT_GAP + "Переглянути")
         self._btn_save_m = QPushButton("Зберегти як…")
         self._btn_load_m = QPushButton("Завантажити…")
         self._btn_del_m = QPushButton("Видалити")
         self._btn_rename = QPushButton("Перейменувати")
+        for _mb in (self._btn_macro_preview, self._btn_save_m, self._btn_load_m, self._btn_rename, self._btn_del_m):
+            _mb.setObjectName("macroSideButton")
         top.addWidget(self._macro_list, 1)
         col = QVBoxLayout()
-        col.setSpacing(8)
-        col.addWidget(self._btn_rec)
-        col.addWidget(self._btn_stop_rec)
-        col.addWidget(self._btn_play)
-        col.addWidget(self._btn_stop_play)
+        col.setSpacing(6)
+        col.addWidget(self._btn_macro_preview)
         col.addWidget(self._btn_save_m)
         col.addWidget(self._btn_load_m)
         col.addWidget(self._btn_rename)
         col.addWidget(self._btn_del_m)
         col.addStretch(1)
-        for _mb in (
-            self._btn_rec,
-            self._btn_stop_rec,
-            self._btn_play,
-            self._btn_stop_play,
-            self._btn_save_m,
-            self._btn_load_m,
-            self._btn_rename,
-            self._btn_del_m,
-        ):
+        for _mb in (self._btn_macro_preview, self._btn_save_m, self._btn_load_m, self._btn_rename, self._btn_del_m):
             _mb.setMinimumWidth(MACRO_SIDE_BTN_MIN_W)
-        self._register_icon_widget(self._btn_rec, "macro_record", "toolbar")
-        self._register_icon_widget(self._btn_stop_rec, "macro_stop_rec", "toolbar")
-        self._register_icon_widget(self._btn_play, "macro_play", "toolbar")
-        self._register_icon_widget(self._btn_stop_play, "macro_stop_play", "toolbar")
+            _mb.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+        self._register_icon_widget(self._btn_macro_preview, "macro_preview", "toolbar")
         self._register_icon_widget(self._btn_save_m, "macro_save_as", "toolbar")
         self._register_icon_widget(self._btn_load_m, "macro_load", "toolbar")
         self._register_icon_widget(self._btn_rename, "macro_rename", "toolbar")
@@ -1161,10 +1167,7 @@ class MainWindow(QMainWindow):
         _mh.setStretchLastSection(True)
         _mh.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         lay.addWidget(self._macro_table, 1)
-        self._btn_rec.clicked.connect(self._macro_start_rec)
-        self._btn_stop_rec.clicked.connect(self._macro_stop_rec)
-        self._btn_play.clicked.connect(self._macro_play)
-        self._btn_stop_play.clicked.connect(self._macro_stop_play)
+        self._btn_macro_preview.clicked.connect(self._macro_preview_from_list)
         self._btn_save_m.clicked.connect(self._macro_save)
         self._btn_load_m.clicked.connect(self._macro_load)
         self._btn_del_m.clicked.connect(self._macro_delete)
@@ -1274,17 +1277,43 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logging.getLogger(__name__).warning("Автозбереження не вдалося: %s", e)
 
-    def _macro_selected(self) -> None:
-        it = self._macro_list.currentItem()
+    def _macro_list_active_item(self):
+        """Після кліку по кнопці фокус зникає зі списку — currentItem() часто None; беремо виділення."""
+        sel = self._macro_list.selectedItems()
+        if sel:
+            return sel[0]
+        return self._macro_list.currentItem()
+
+    def _ensure_macro_table_visible(self) -> None:
+        w: QWidget | None = self._macro_table
+        for _ in range(16):
+            if w is None:
+                return
+            p = w.parentWidget()
+            if isinstance(p, QScrollArea):
+                p.ensureWidgetVisible(self._macro_table)
+                return
+            w = p
+
+    def _macro_preview_from_list(self) -> None:
+        self._load_macro_from_list_item(silent=False)
+
+    def _load_macro_from_list_item(self, silent: bool) -> None:
+        it = self._macro_list_active_item()
         if not it:
+            if not silent:
+                QMessageBox.information(self, "Макрос", "Оберіть файл у списку.")
             return
         path = self._macros_path() / it.text()
         raw = read_json(path, {})
         try:
             self._current_macro = MacroDefinition.from_dict(raw)
             self._fill_macro_table(self._current_macro)
+            QTimer.singleShot(0, self._ensure_macro_table_visible)
         except Exception as e:
             logging.getLogger(__name__).exception("Помилка читання макросу: %s", e)
+            if not silent:
+                QMessageBox.warning(self, "Макрос", f"Не вдалося прочитати файл:\n{e}")
 
     def _fill_macro_table(self, macro: MacroDefinition) -> None:
         self._macro_table.setRowCount(0)
@@ -1342,8 +1371,18 @@ class MainWindow(QMainWindow):
         )
 
     def _macro_play(self) -> None:
+        it = self._macro_list_active_item()
+        if it:
+            path = self._macros_path() / it.text()
+            raw = read_json(path, {})
+            try:
+                self._current_macro = MacroDefinition.from_dict(raw)
+            except Exception as e:
+                logging.getLogger(__name__).exception("Макрос для відтворення: %s", e)
+                QMessageBox.warning(self, "Макрос", f"Не вдалося прочитати файл:\n{e}")
+                return
         if not self._current_macro or not self._current_macro.events:
-            QMessageBox.warning(self, "Макрос", "Немає подій для відтворення.")
+            QMessageBox.warning(self, "Макрос", "Немає подій для відтворення. Оберіть файл і натисніть «Переглянути» або запишіть макрос.")
             return
         cfg = self._macro_play_cfg()
         if cfg.repeat_count < 0 and not self._settings.infinite_loop_confirmed:

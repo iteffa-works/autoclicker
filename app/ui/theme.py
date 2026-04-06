@@ -2,16 +2,28 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
+from pathlib import Path
+
 from app.models.settings import ThemeMode
 from app.ui import design_tokens as T
 
-# PNG 18×18 — Qt QSS на Windows не показує галочку з data:image/svg+xml у QCheckBox::indicator.
-_CHK_INDICATOR_DARK = (
-    "iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAAW0lEQVR4nGNgGAWDGzT2/PiPLsZEriGNaIaRbBAM1JdwMDKQCxp7fvzH5i2cLsKmuBGHATgNwhYGjUhsXF7CMAhZIbor6vGEC04JUgzBG2sUxQo20EggkEcAAABpnC0qJ534dQAAAABJRU5ErkJggg=="
-)
-_CHK_INDICATOR_LIGHT = (
-    "iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAAW0lEQVR4nGNgGAWDGySnffyPLsZEriHJaIaRbBAMzJ3Fz8hALkhO+/gfm7dwugib4mQcBuA0CFsYJCOxcXkJwyBkheiumIsnXHBKkGII3lijKFawgWQCgTwCAACvMysd+RSXlAAAAABJRU5ErkJggg=="
-)
+# QSS `image:` — pixmap з qtawesome пишемо у тимчасовий PNG (один файл на процес, перезапис при зміні теми).
+_chk_qta_png: Path | None = None
+
+
+def _checkbox_checked_qta_url(theme: ThemeMode) -> str:
+    from app.ui.app_icons import checkbox_checked_pixmap
+
+    global _chk_qta_png
+    pm = checkbox_checked_pixmap(theme)
+    if _chk_qta_png is None:
+        _chk_qta_png = Path(tempfile.gettempdir()) / f"autoclicker_chk_{os.getpid()}.png"
+    pm.save(str(_chk_qta_png), "PNG")
+    return _chk_qta_png.resolve().as_uri()
+
+
 # QSpinBox/QComboBox: border-трикутники (width:0) на Windows часто стають квадратами — PNG у image:.
 _SPIN_UP_DARK = "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAICAYAAADN5B7xAAAAL0lEQVR4nGNgGDAwZfGO/9jEmfApxqYJQwO6InQ+VhvwARQNuNyNLA7XgEsxujwAGf4aaYb1sjsAAAAASUVORK5CYII="
 _SPIN_DOWN_DARK = "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAICAYAAADN5B7xAAAAOUlEQVR4nGNgIBEwwhhTFu/4T0hxTqwHIxMyh5BiBgYGBrgGfJqQxVE0EAMwNKDbQsipcEBMIBAFAPzrDWSBzvGzAAAAAElFTkSuQmCC"
@@ -24,8 +36,7 @@ def _check_indicator_data_url(png_b64: str) -> str:
 
 
 def stylesheet_for(theme: ThemeMode) -> str:
-    chk_d = _check_indicator_data_url(_CHK_INDICATOR_DARK)
-    chk_l = _check_indicator_data_url(_CHK_INDICATOR_LIGHT)
+    chk_on = _checkbox_checked_qta_url(theme)
     spin_u_d = _check_indicator_data_url(_SPIN_UP_DARK)
     spin_d_d = _check_indicator_data_url(_SPIN_DOWN_DARK)
     spin_u_l = _check_indicator_data_url(_SPIN_UP_LIGHT)
@@ -86,6 +97,12 @@ def stylesheet_for(theme: ThemeMode) -> str:
         QPushButton#acStart, QPushButton#acPause, QPushButton#acStop {{
             padding: 4px 8px 5px 6px;
             font-size: 11px;
+            icon-size: 16px;
+        }}
+        QPushButton#macroSideButton {{
+            text-align: left;
+            padding: 4px 6px 5px 6px;
+            font-size: 10px;
             icon-size: 16px;
         }}
         QLabel#headerTitle {{ color: {tp}; font-size: 15px; font-weight: 600; }}
@@ -200,14 +217,17 @@ def stylesheet_for(theme: ThemeMode) -> str:
         QLabel#sectionTitle {{
             color: {tp};
             font-size: 13px;
-            font-weight: 600;
+            font-weight: 700;
             margin: 0;
             padding: 0;
+            background: transparent;
+            border: none;
         }}
         QLabel#sectionTitleIcon {{
             min-width: 20px;
             min-height: 20px;
             background: transparent;
+            border: none;
         }}
         QLabel#formFieldLabel {{
             color: {ts};
@@ -441,6 +461,10 @@ def stylesheet_for(theme: ThemeMode) -> str:
             border: 1px solid {b};
             border-radius: 8px;
         }}
+        QListWidget#macroFileList {{
+            padding: 2px;
+            border-radius: 6px;
+        }}
         QCheckBox {{ spacing: 10px; color: {tp}; }}
         QCheckBox::indicator {{
             width: 18px;
@@ -450,9 +474,9 @@ def stylesheet_for(theme: ThemeMode) -> str:
             background: {surf2};
         }}
         QCheckBox::indicator:checked {{
-            background: rgba(99,102,241,0.2);
-            border: 1px solid {ac};
-            image: url({chk_d});
+            border: none;
+            background: transparent;
+            image: url({chk_on});
         }}
         QCheckBox:disabled {{ color: {td}; }}
         QWidget#settingsTabRoot QCheckBox {{ spacing: 6px; }}
@@ -551,6 +575,12 @@ def stylesheet_for(theme: ThemeMode) -> str:
         QPushButton#acStart, QPushButton#acPause, QPushButton#acStop {{
             padding: 4px 8px 5px 6px;
             font-size: 11px;
+            icon-size: 16px;
+        }}
+        QPushButton#macroSideButton {{
+            text-align: left;
+            padding: 4px 6px 5px 6px;
+            font-size: 10px;
             icon-size: 16px;
         }}
         QLabel#headerTitle {{ color: {tp}; font-size: 15px; font-weight: 600; }}
@@ -664,14 +694,17 @@ def stylesheet_for(theme: ThemeMode) -> str:
         QLabel#sectionTitle {{
             color: {tp};
             font-size: 13px;
-            font-weight: 600;
+            font-weight: 700;
             margin: 0;
             padding: 0;
+            background: transparent;
+            border: none;
         }}
         QLabel#sectionTitleIcon {{
             min-width: 20px;
             min-height: 20px;
             background: transparent;
+            border: none;
         }}
         QLabel#formFieldLabel {{
             color: {ts};
@@ -905,6 +938,10 @@ def stylesheet_for(theme: ThemeMode) -> str:
             border: 1px solid {b};
             border-radius: 8px;
         }}
+        QListWidget#macroFileList {{
+            padding: 2px;
+            border-radius: 6px;
+        }}
         QCheckBox {{ spacing: 10px; }}
         QCheckBox::indicator {{
             width: 18px;
@@ -914,9 +951,9 @@ def stylesheet_for(theme: ThemeMode) -> str:
             background: {surf};
         }}
         QCheckBox::indicator:checked {{
-            background: {sel_bg};
-            border: 1px solid {ac};
-            image: url({chk_l});
+            border: none;
+            background: transparent;
+            image: url({chk_on});
         }}
         QWidget#settingsTabRoot QCheckBox {{ spacing: 6px; }}
         QWidget#settingsTabRoot QLineEdit,
