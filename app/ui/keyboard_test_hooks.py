@@ -51,6 +51,10 @@ class KeyboardTestHooks(QObject):
                 name = "right"
             elif button == mouse.Button.middle:
                 name = "middle"
+            elif button == mouse.Button.x1:
+                name = "back"
+            elif button == mouse.Button.x2:
+                name = "forward"
             self.mouse_button.emit(name, pressed)
             self.mouse_position.emit(int(x), int(y))
 

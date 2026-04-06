@@ -72,10 +72,12 @@ from app.services.logging_service import LoggingService
 from app.services.settings_store import load_settings, save_settings
 from app.services.sound_service import play_beep
 from app.services.tray_service import TrayService
+from app.ui.app_icons import NAV_ICON_KEYS, app_icon, icon_kind_size
 from app.ui.keyboard_test_hooks import KeyboardTestHooks
 from app.ui.keyboard_test_ui import KeyboardTestPanel, MouseTestPanel
 from app.ui.overlay_widget import ActivityOverlay
-from app.ui.app_icons import NAV_ICON_KEYS, app_icon, icon_kind_size
+from app.ui.themed_checkbox import ThemedCheckBox as QCheckBox
+from app.ui.themed_checkbox import sync_themed_checkboxes
 from app.ui.design_tokens import (
     AC_COL_COMBO_MAX_W,
     AC_COL_FIELD_MAX_W,
@@ -1874,6 +1876,7 @@ class MainWindow(QMainWindow):
 
     def _apply_theme(self) -> None:
         self.setStyleSheet(stylesheet_for(self._settings.theme))
+        sync_themed_checkboxes(self, self._settings.theme)
         self._refresh_ui_icons()
         if hasattr(self, "_kb_panel"):
             self._kb_panel.set_theme(self._settings.theme)

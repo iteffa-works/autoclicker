@@ -4,7 +4,16 @@ from __future__ import annotations
 
 import qtawesome as qta
 
-from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtGui import (
+    QBrush,
+    QColor,
+    QIcon,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPixmap,
+)
 
 from app.models.settings import ThemeMode
 from app.ui import design_tokens as T
@@ -96,23 +105,71 @@ def app_icon(key: str, theme: ThemeMode) -> QIcon:
     return qta.icon(fa, color=_icon_color(theme))
 
 
-def checkbox_checked_pixmap(theme: ThemeMode) -> QPixmap:
-    """Зелений «увімкнено»: квадрат + галочка (два шари fa5s)."""
+def _paint_vector_checkmark_color(p: QPainter, check_hex: str) -> None:
+    """Галочка штрихами — один шар PNG для QSS `image:`."""
+    pen = QPen(QColor(check_hex))
+    pen.setWidthF(2.5)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    path = QPainterPath()
+    path.moveTo(QPointF(4.0, 9.2))
+    path.lineTo(QPointF(7.85, 13.0))
+    path.lineTo(QPointF(14.0, 5.2))
+    p.strokePath(path, pen)
+
+
+def _checkbox_indicator_composite_pixmap(
+    border_hex: str,
+    fill_hex: str,
+    check_hex: str,
+    *,
+    radius: float = 5.0,
+) -> QPixmap:
+    """18×18: рамка + заливка + галочка (повний растр для QCheckBox::indicator:checked*)."""
     s = CHECKBOX_INDICATOR_PX
+    pm = QPixmap(s, s)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pen = QPen(QColor(border_hex))
+    pen.setWidth(1)
+    p.setPen(pen)
+    p.setBrush(QBrush(QColor(fill_hex)))
+    p.drawRoundedRect(QRectF(0.5, 0.5, s - 1.0, s - 1.0), radius, radius)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    _paint_vector_checkmark_color(p, check_hex)
+    p.end()
+    return pm
+
+
+def checkbox_checked_state_pixmaps(theme: ThemeMode) -> dict[str, QPixmap]:
+    """Растри для QSS: checked, checked_hover, checked_pressed, checked_disabled."""
     if theme == ThemeMode.DARK:
-        return qta.icon(
-            "fa5s.square",
-            "fa5s.check",
-            options=[
-                {"color": T.D_STATE_SUCCESS, "scale_factor": 1.0},
-                {"color": "#FFFFFF", "scale_factor": 0.55},
-            ],
-        ).pixmap(s, s)
-    return qta.icon(
-        "fa5s.square",
-        "fa5s.check",
-        options=[
-            {"color": "#DCFCE7", "scale_factor": 1.0},
-            {"color": "#166534", "scale_factor": 0.55},
-        ],
-    ).pixmap(s, s)
+        return {
+            "checked": _checkbox_indicator_composite_pixmap(
+                T.D_ACCENT, T.D_SELECTION_BG, "#FFFFFF"
+            ),
+            "checked_hover": _checkbox_indicator_composite_pixmap(
+                T.D_ACCENT_HOVER, "#3730A3", "#FFFFFF"
+            ),
+            "checked_pressed": _checkbox_indicator_composite_pixmap(
+                T.D_ACCENT_ACTIVE, "#1E1B4B", "#F8FAFC"
+            ),
+            "checked_disabled": _checkbox_indicator_composite_pixmap(
+                "#475569", "#334155", "#94A3B8"
+            ),
+        }
+    return {
+        "checked": _checkbox_indicator_composite_pixmap(
+            T.L_ACCENT, T.L_SELECTION_BG, T.L_ACCENT_ACTIVE
+        ),
+        "checked_hover": _checkbox_indicator_composite_pixmap(
+            T.L_ACCENT_HOVER, "#E0E7FF", "#312E81"
+        ),
+        "checked_pressed": _checkbox_indicator_composite_pixmap(
+            T.L_ACCENT_ACTIVE, "#C7D2FE", "#1E1B4B"
+        ),
+        "checked_disabled": _checkbox_indicator_composite_pixmap(
+            "#CBD5E1", "#F1F5F9", "#94A3B8"
+        ),
+    }

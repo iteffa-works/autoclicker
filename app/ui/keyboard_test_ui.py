@@ -8,7 +8,6 @@ from collections import defaultdict, deque
 from PySide6.QtCore import QEvent, QEasingCurve, QPropertyAnimation, Qt, QTimer
 from PySide6.QtGui import QEnterEvent
 from PySide6.QtWidgets import (
-    QCheckBox,
     QFrame,
     QGraphicsOpacityEffect,
     QGridLayout,
@@ -24,6 +23,7 @@ from app.models.settings import ThemeMode
 from app.ui import design_tokens as DT
 from app.ui.app_icons import app_icon
 from app.ui.keyboard_vk_map import KEY_ID_TO_VK_LAYOUT_ONLY
+from app.ui.themed_checkbox import ThemedCheckBox as QCheckBox
 from app.ui.theme import (
     KeyboardKeycapStyles,
     keyboard_frame_style,
@@ -191,7 +191,7 @@ class KeyboardTestPanel(QWidget):
         hist_row = QHBoxLayout()
         hist_row.setContentsMargins(DT.S12, 0, DT.S12, 0)
         hist_row.setSpacing(DT.S8)
-        self._hist_check = QCheckBox("Історія натискань")
+        self._hist_check = QCheckBox("Історія натискань", theme=self._theme)
         self._hist_check.setToolTip("Показувати останні натискання клавіш")
         hist_row.addWidget(self._hist_check)
         self._hist_chips_host = QWidget()
@@ -512,6 +512,7 @@ class KeyboardTestPanel(QWidget):
 
     def set_theme(self, theme: ThemeMode) -> None:
         self._theme = theme
+        self._hist_check.set_theme(theme)
         self._styles = keyboard_keycap_styles(theme)
         self.setStyleSheet(keyboard_frame_style(theme))
         self._apply_styles_to_caps()
@@ -577,7 +578,13 @@ class MouseTestPanel(QWidget):
     def __init__(self, theme: ThemeMode) -> None:
         super().__init__()
         self._theme = theme
-        self._down = {"left": False, "right": False, "middle": False}
+        self._down = {
+            "left": False,
+            "right": False,
+            "middle": False,
+            "back": False,
+            "forward": False,
+        }
         self._header_icons: list[tuple[str, QLabel]] = []
 
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
@@ -592,7 +599,15 @@ class MouseTestPanel(QWidget):
         self._pill_l = QLabel("відпущено")
         self._pill_r = QLabel("відпущено")
         self._pill_m = QLabel("відпущено")
-        for p in (self._pill_l, self._pill_r, self._pill_m):
+        self._pill_back = QLabel("відпущено")
+        self._pill_fwd = QLabel("відпущено")
+        for p in (
+            self._pill_l,
+            self._pill_r,
+            self._pill_m,
+            self._pill_back,
+            self._pill_fwd,
+        ):
             p.setObjectName("mouseTestPill")
         self._lbl_x = QLabel("0")
         self._lbl_y = QLabel("0")
@@ -632,7 +647,7 @@ class MouseTestPanel(QWidget):
     def _build_card_mouse(self) -> QFrame:
         card = QFrame()
         card.setObjectName("kbTestCard")
-        card.setMinimumHeight(148)
+        card.setMinimumHeight(156)
         v = QVBoxLayout(card)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
@@ -648,6 +663,8 @@ class MouseTestPanel(QWidget):
             ("ЛКМ", self._pill_l),
             ("ПКМ", self._pill_r),
             ("СКМ", self._pill_m),
+            ("Назад", self._pill_back),
+            ("Вперед", self._pill_fwd),
         ):
             cell = QFrame()
             cell.setObjectName("mouseDiagCell")
@@ -731,9 +748,13 @@ class MouseTestPanel(QWidget):
         self._pill_l.setStyleSheet(mouse_test_pill_style(t, self._down["left"]))
         self._pill_r.setStyleSheet(mouse_test_pill_style(t, self._down["right"]))
         self._pill_m.setStyleSheet(mouse_test_pill_style(t, self._down["middle"]))
+        self._pill_back.setStyleSheet(mouse_test_pill_style(t, self._down["back"]))
+        self._pill_fwd.setStyleSheet(mouse_test_pill_style(t, self._down["forward"]))
         self._pill_l.setText("натиснуто" if self._down["left"] else "відпущено")
         self._pill_r.setText("натиснуто" if self._down["right"] else "відпущено")
         self._pill_m.setText("натиснуто" if self._down["middle"] else "відпущено")
+        self._pill_back.setText("натиснуто" if self._down["back"] else "відпущено")
+        self._pill_fwd.setText("натиснуто" if self._down["forward"] else "відпущено")
 
     def set_pos(self, x: int, y: int) -> None:
         self._lbl_x.setText(str(x))
@@ -744,8 +765,12 @@ class MouseTestPanel(QWidget):
             self._down["left"] = down
         elif name == "right":
             self._down["right"] = down
-        else:
+        elif name == "middle":
             self._down["middle"] = down
+        elif name == "back":
+            self._down["back"] = down
+        elif name == "forward":
+            self._down["forward"] = down
         self._apply_pills()
 
     def set_scroll(self, dx: int, dy: int) -> None:

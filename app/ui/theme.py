@@ -2,26 +2,129 @@
 
 from __future__ import annotations
 
-import os
-import tempfile
-from pathlib import Path
+import base64
+
+from PySide6.QtCore import QByteArray, QBuffer, QIODevice
 
 from app.models.settings import ThemeMode
 from app.ui import design_tokens as T
 
-# QSS `image:` — pixmap з qtawesome пишемо у тимчасовий PNG (один файл на процес, перезапис при зміні теми).
-_chk_qta_png: Path | None = None
+
+def _pixmap_to_data_url(pm) -> str:
+    """PNG → data:image/png;base64,... для QSS."""
+    ba = QByteArray()
+    buf = QBuffer(ba)
+    buf.open(QIODevice.OpenModeFlag.WriteOnly)
+    try:
+        if not pm.save(buf, "PNG"):
+            return ""
+    finally:
+        buf.close()
+    return _check_indicator_data_url(base64.b64encode(ba.data()).decode("ascii"))
 
 
-def _checkbox_checked_qta_url(theme: ThemeMode) -> str:
-    from app.ui.app_icons import checkbox_checked_pixmap
+def _checkbox_checked_image_urls(theme: ThemeMode) -> dict[str, str]:
+    from app.ui.app_icons import checkbox_checked_state_pixmaps
 
-    global _chk_qta_png
-    pm = checkbox_checked_pixmap(theme)
-    if _chk_qta_png is None:
-        _chk_qta_png = Path(tempfile.gettempdir()) / f"autoclicker_chk_{os.getpid()}.png"
-    pm.save(str(_chk_qta_png), "PNG")
-    return _chk_qta_png.resolve().as_uri()
+    return {k: _pixmap_to_data_url(v) for k, v in checkbox_checked_state_pixmaps(theme).items()}
+
+
+def _qcheckbox_stylesheet(theme: ThemeMode) -> str:
+    """QCheckBox: усі стани індикатора; галочка — растр (image: url)."""
+    u = _checkbox_checked_image_urls(theme)
+    c = u["checked"]
+    ch = u["checked_hover"]
+    cp = u["checked_pressed"]
+    cd = u["checked_disabled"]
+    if theme == ThemeMode.DARK:
+        tp, td = T.D_TEXT_PRIMARY, T.D_TEXT_DISABLED
+        b, surf2 = T.D_BORDER_SUBTLE, T.D_BG_SURFACE2
+        return f"""
+        QCheckBox {{ spacing: 10px; color: {tp}; }}
+        QCheckBox::indicator {{
+            width: 18px;
+            height: 18px;
+            border: 1px solid {b};
+            border-radius: 5px;
+            background: {surf2};
+        }}
+        QCheckBox::indicator:hover {{
+            background: #334155;
+            border: 1px solid #475569;
+        }}
+        QCheckBox::indicator:pressed {{
+            background: #1e293b;
+            border: 1px solid {b};
+        }}
+        QCheckBox::indicator:checked {{
+            width: 18px;
+            height: 18px;
+            border: none;
+            background: transparent;
+            image: url("{c}");
+        }}
+        QCheckBox::indicator:checked:hover {{
+            image: url("{ch}");
+        }}
+        QCheckBox::indicator:checked:pressed {{
+            image: url("{cp}");
+        }}
+        QCheckBox::indicator:disabled {{
+            background: #293548;
+            border: 1px solid #475569;
+        }}
+        QCheckBox::indicator:checked:disabled {{
+            border: none;
+            background: transparent;
+            image: url("{cd}");
+        }}
+        QCheckBox:disabled {{ color: {td}; }}
+        QWidget#settingsTabRoot QCheckBox {{ spacing: 6px; }}
+        """
+    tp, td = T.L_TEXT_PRIMARY, T.L_TEXT_DISABLED
+    b, surf = T.L_BORDER_SUBTLE, T.L_BG_SURFACE
+    return f"""
+        QCheckBox {{ spacing: 10px; color: {tp}; }}
+        QCheckBox::indicator {{
+            width: 18px;
+            height: 18px;
+            border: 1px solid {b};
+            border-radius: 5px;
+            background: {surf};
+        }}
+        QCheckBox::indicator:hover {{
+            background: #F1F5F9;
+            border: 1px solid #CBD5E1;
+        }}
+        QCheckBox::indicator:pressed {{
+            background: #E2E8F0;
+            border: 1px solid {b};
+        }}
+        QCheckBox::indicator:checked {{
+            width: 18px;
+            height: 18px;
+            border: none;
+            background: transparent;
+            image: url("{c}");
+        }}
+        QCheckBox::indicator:checked:hover {{
+            image: url("{ch}");
+        }}
+        QCheckBox::indicator:checked:pressed {{
+            image: url("{cp}");
+        }}
+        QCheckBox::indicator:disabled {{
+            background: #F1F5F9;
+            border: 1px solid #E2E8F0;
+        }}
+        QCheckBox::indicator:checked:disabled {{
+            border: none;
+            background: transparent;
+            image: url("{cd}");
+        }}
+        QCheckBox:disabled {{ color: {td}; }}
+        QWidget#settingsTabRoot QCheckBox {{ spacing: 6px; }}
+        """
 
 
 # QSpinBox/QComboBox: border-трикутники (width:0) на Windows часто стають квадратами — PNG у image:.
@@ -36,7 +139,7 @@ def _check_indicator_data_url(png_b64: str) -> str:
 
 
 def stylesheet_for(theme: ThemeMode) -> str:
-    chk_on = _checkbox_checked_qta_url(theme)
+    qcb = _qcheckbox_stylesheet(theme)
     spin_u_d = _check_indicator_data_url(_SPIN_UP_DARK)
     spin_d_d = _check_indicator_data_url(_SPIN_DOWN_DARK)
     spin_u_l = _check_indicator_data_url(_SPIN_UP_LIGHT)
@@ -465,21 +568,7 @@ def stylesheet_for(theme: ThemeMode) -> str:
             padding: 2px;
             border-radius: 6px;
         }}
-        QCheckBox {{ spacing: 10px; color: {tp}; }}
-        QCheckBox::indicator {{
-            width: 18px;
-            height: 18px;
-            border: 1px solid {b};
-            border-radius: 4px;
-            background: {surf2};
-        }}
-        QCheckBox::indicator:checked {{
-            border: none;
-            background: transparent;
-            image: url({chk_on});
-        }}
-        QCheckBox:disabled {{ color: {td}; }}
-        QWidget#settingsTabRoot QCheckBox {{ spacing: 6px; }}
+        {qcb}
         QWidget#settingsTabRoot QLineEdit,
         QWidget#settingsTabRoot QSpinBox,
         QWidget#settingsTabRoot QDoubleSpinBox,
@@ -942,20 +1031,7 @@ def stylesheet_for(theme: ThemeMode) -> str:
             padding: 2px;
             border-radius: 6px;
         }}
-        QCheckBox {{ spacing: 10px; }}
-        QCheckBox::indicator {{
-            width: 18px;
-            height: 18px;
-            border: 1px solid {b};
-            border-radius: 4px;
-            background: {surf};
-        }}
-        QCheckBox::indicator:checked {{
-            border: none;
-            background: transparent;
-            image: url({chk_on});
-        }}
-        QWidget#settingsTabRoot QCheckBox {{ spacing: 6px; }}
+        {qcb}
         QWidget#settingsTabRoot QLineEdit,
         QWidget#settingsTabRoot QSpinBox,
         QWidget#settingsTabRoot QDoubleSpinBox,
@@ -1147,7 +1223,7 @@ def mouse_test_pill_style(theme: ThemeMode, down: bool) -> str:
 
 
 def keyboard_test_area_styles(theme: ThemeMode) -> str:
-    """Підкладка тесту: одна пластина для main + numpad; історія натискань."""
+    """Підкладка тесту: одна пластина для main + numpad; історія натискань (QCheckBox — глобальний QSS)."""
     if theme == ThemeMode.DARK:
         outer = T.KB_TEST_PLATE_OUTER
         plate = T.KB_TEST_PLATE
@@ -1156,6 +1232,7 @@ def keyboard_test_area_styles(theme: ThemeMode) -> str:
             f"QWidget#keyboardTestRoot {{ background: {outer}; border: none; border-radius: 0px; }}"
             f"QWidget#keyboardVisual {{ border: 1px solid {b}; border-radius: 12px; background: {plate}; padding: 0px; }}"
             f"QWidget#kbdNumpadSection {{ background: transparent; border: none; }}"
+            f"QWidget#keyboardTestRoot QCheckBox {{ spacing: 8px; }}"
             f"QLabel#kbHistChip {{ color: {T.D_TEXT_PRIMARY}; font-size: 11px; font-weight: 500; "
             f"background: {T.D_BG_SURFACE2}; border: 1px solid {b}; border-radius: 4px; padding: 2px 8px; }}"
         )
@@ -1166,6 +1243,7 @@ def keyboard_test_area_styles(theme: ThemeMode) -> str:
         f"QWidget#keyboardTestRoot {{ background: {outer}; border: none; }}"
         f"QWidget#keyboardVisual {{ border: 1px solid {b}; border-radius: 12px; background: {plate}; padding: 0px; }}"
         f"QWidget#kbdNumpadSection {{ background: transparent; border: none; }}"
+        f"QWidget#keyboardTestRoot QCheckBox {{ spacing: 8px; }}"
         f"QLabel#kbHistChip {{ color: {T.L_TEXT_PRIMARY}; font-size: 11px; font-weight: 500; "
         f"background: {T.L_BG_SURFACE2}; border: 1px solid {b}; border-radius: 4px; padding: 2px 8px; }}"
     )
