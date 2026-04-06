@@ -1,0 +1,18 @@
+{
+  "sequence_repeat_mode": "full",
+  "ac_micro_move_px": 2,
+  "ac_pause_extra_ms": 221.0,
+  "saved_click_x": 0,
+  "sequence_loop_infinite": true,
+  "ac_pre_click_delay_ms_max": 0.0,
+  "saved_click_y": 0,
+  "ac_jitter_gaussian": false,
+  "last_cursor_y": 21,
+  "sequence_step_index": 0,
+  "ac_humanize_enabled": false,
+  "last_cursor_x": 1438,
+  "autoclick_key_repeat_key": "e",
+  "ac_pause_chance_percent": 1.0,
+  "autoclick_sequence_steps": [],
+  "autoclick_work_mode": "simple"
+}

@@ -53,19 +53,22 @@ from app.branding import (
     STUDIO_URL,
     WINDOW_TITLE,
 )
-from app.core.autoclicker import AutoclickConfig, AutoclickerEngine, ClickMode, MouseButtonChoice
-from app.core.sequence_autoclicker import SequenceAutoclickConfig, SequenceAutoclickerEngine
+from app.core.autoclicker import AutoclickConfig, ClickMode, MouseButtonChoice
 from app.core.bind_validator import validate_bindings
+from app.core.clicker_facade import UnifiedClickerEngine
+from app.core.event_bus import AppEvent, EventBus, EventType
+from app.core.input_engine import InputEngine
 from app.core.macro_engine import MacroEngine, MacroPlayConfig, MacroRecordSession
+from app.core.sequence_autoclicker import SequenceAutoclickConfig
 from app.core.state import AppRunState, AutoclickState
 from app.models.autoclick_sequence import AutoclickSequenceStep, AutoclickSequenceStepType, SequenceRepeatMode
 from app.models.bindings import BindingsConfig, HotkeyChord
 from app.models.macro import MacroDefinition, MacroEvent, MacroEventType, MacroSpeedMode
 from app.models.recording_profile import RecordingProfile
 from app.models.settings import HotkeyBackend, LogLevel, ThemeMode
-from app.services.hotkey_service import ChordCaptureSession, HotkeyService
-from app.services.win_hotkey_service import WM_HOTKEY, Win32HotkeyRegistry
-from app.services.log_service import setup_logging
+from app.services.hotkey_service import ChordCaptureSession
+from app.services.hotkey_manager import HotkeyManager
+from app.services.logging_service import LoggingService
 from app.services.settings_store import load_settings, save_settings
 from app.services.sound_service import play_beep
 from app.services.tray_service import TrayService
@@ -89,10 +92,12 @@ from app.ui.design_tokens import (
     WINDOW_HEIGHT,
     WINDOW_WIDTH,
 )
+from app.presenter import AppPresenter
+from app.ui.tabs.logs_tab import build_logs_tab
 from app.ui.theme import stylesheet_for
 from app.utils.json_io import read_json, write_json
 from app.utils.paths import assets_dir, macros_dir
-from pynput.mouse import Controller as MouseController
+from app.services.win_hotkey_service import WM_HOTKEY
 
 # QSS не задає gap між іконкою та підписом у QPushButton — тонкий пробіл (було 3× en — забагато).
 _ICON_TEXT_GAP = "\u2009"
@@ -110,6 +115,7 @@ _NAV_INDEX_KEYBOARD_TEST = 2
 class MainWindow(QMainWindow):
     append_log = Signal(str)
     macro_done = Signal()
+    status_refresh = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -117,19 +123,20 @@ class MainWindow(QMainWindow):
         self.setFixedSize(WINDOW_WIDTH, WINDOW_HEIGHT)
         self._apply_no_maximize_button()
         self._settings = load_settings()
+        self._event_bus = EventBus()
         self._icon_targets: list[tuple[QWidget, str, str]] = []
-        self._autoclick = AutoclickerEngine()
-        self._seq_autoclick = SequenceAutoclickerEngine()
-        self._macro_engine = MacroEngine()
-        self._hotkeys = HotkeyService()
-        self._win32_hotkeys = Win32HotkeyRegistry()
+        self._clicker = UnifiedClickerEngine(self._event_bus)
+        self._macro_engine = MacroEngine(self._event_bus)
+        self._hotkey_manager = HotkeyManager()
+        self._input = InputEngine()
+        self._logging_service = LoggingService()
+        self._presenter = AppPresenter(self._event_bus, self._logging_service)
         self._force_exit = False
         self._record_session: MacroRecordSession | None = None
         self._current_macro: MacroDefinition | None = None
         self._capture: ChordCaptureSession | None = None
         self._capture_field: str | None = None
         self._kb_hooks = KeyboardTestHooks()
-        self._mouse_ctrl = MouseController()
         self._overlay = ActivityOverlay()
         self._overlay.set_opacity(self._settings.overlay_opacity)
         self._overlay.set_stop_callback(self._emergency)
@@ -150,6 +157,8 @@ class MainWindow(QMainWindow):
         self._tray = TrayService(self)
         self.append_log.connect(self._append_log_slot)
         self.macro_done.connect(self._refresh_status)
+        self.status_refresh.connect(self._refresh_status)
+        self._wire_engine_events()
         self._apply_theme()
         self._refresh_status()
 
@@ -166,11 +175,25 @@ class MainWindow(QMainWindow):
         if self._settings.minimize_to_tray:
             self._tray.show()
 
+    def _wire_engine_events(self) -> None:
+        def _on_bus(_: AppEvent) -> None:
+            self.status_refresh.emit()
+
+        for kind in (
+            EventType.CLICK_STARTED,
+            EventType.CLICK_STOPPED,
+            EventType.CLICK_PAUSED,
+            EventType.CLICK_RESUMED,
+            EventType.MACRO_PLAY_STARTED,
+            EventType.MACRO_PLAY_STOPPED,
+        ):
+            self._event_bus.subscribe(kind, _on_bus)
+
     def _setup_logging(self) -> None:
         def ui_emit(msg: str) -> None:
             self.append_log.emit(msg)
 
-        setup_logging(self._settings.log_level, self._settings.log_to_file, ui_emit)
+        self._logging_service.configure(self._settings.log_level, self._settings.log_to_file, ui_emit)
         logging.getLogger(__name__).info("Запуск застосунку")
 
     def _create_autoclick_buttons(self) -> None:
@@ -296,7 +319,7 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(self._build_macro_tab())
         self._stack.addWidget(self._build_kb_tab())
         self._stack.addWidget(self._build_settings_tab())
-        self._stack.addWidget(self._build_logs_tab())
+        self._stack.addWidget(build_logs_tab(self))
 
         header = QWidget()
         header.setObjectName("headerBar")
@@ -942,20 +965,20 @@ class MainWindow(QMainWindow):
             return float(self._ac_interval_ms.value())
         return 1000.0 / max(0.1, float(self._ac_cps.value()))
 
+    def _ac_work_mode_key(self) -> str:
+        idx = self._ac_work_mode.currentIndex()
+        modes = ("simple", "sequence", "key_repeat")
+        return modes[idx] if idx < len(modes) else "simple"
+
     def _active_autoclick_state(self) -> AutoclickState:
-        if self._ac_work_mode.currentIndex() == 0:
-            return self._autoclick.get_state()
-        return self._seq_autoclick.get_state()
+        return self._clicker.get_state(self._ac_work_mode_key())
 
     def _ac_start(self) -> None:
         self._sync_ac_settings_from_ui()
         mode = self._settings.autoclick_work_mode
         if mode == "simple":
-            self._seq_autoclick.stop()
-            self._autoclick.set_config(self._ac_config_from_ui())
-            self._autoclick.start()
+            self._clicker.start_simple(self._ac_config_from_ui())
         elif mode == "sequence":
-            self._autoclick.stop()
             steps: list[AutoclickSequenceStep] = []
             for x in self._settings.autoclick_sequence_steps:
                 try:
@@ -978,14 +1001,13 @@ class MainWindow(QMainWindow):
                 jitter_ms=float(self._ac_jitter.value()),
                 key_repeat_token="",
             )
-            self._seq_autoclick.start_sequence(cfg)
+            self._clicker.start_sequence(cfg)
         else:
-            self._autoclick.stop()
             tok = (self._settings.autoclick_key_repeat_key or "").strip()
             if not tok:
                 QMessageBox.warning(self, "Автоклікер", "Вкажіть клавішу для повтору.")
                 return
-            self._seq_autoclick.start_key_repeat(
+            self._clicker.start_key_repeat(
                 tok,
                 self._ac_effective_interval_ms(),
                 float(self._ac_jitter.value()),
@@ -996,23 +1018,11 @@ class MainWindow(QMainWindow):
         logging.getLogger(__name__).info("Автоклікер: старт")
 
     def _ac_pause(self) -> None:
-        if self._ac_work_mode.currentIndex() == 0:
-            st = self._autoclick.get_state()
-            if st == AutoclickState.PAUSED:
-                self._autoclick.resume()
-            else:
-                self._autoclick.pause()
-        else:
-            st = self._seq_autoclick.get_state()
-            if st == AutoclickState.PAUSED:
-                self._seq_autoclick.resume()
-            else:
-                self._seq_autoclick.pause()
+        self._clicker.pause(self._ac_work_mode_key())
         self._refresh_status()
 
     def _ac_stop(self) -> None:
-        self._autoclick.stop()
-        self._seq_autoclick.stop()
+        self._clicker.stop_all()
         if self._settings.sound_on_start_stop:
             play_beep("stop")
         self._refresh_status()
@@ -1031,7 +1041,7 @@ class MainWindow(QMainWindow):
         self._ac_pre_click.setValue(0)
 
     def _ac_save_xy(self) -> None:
-        p = self._mouse_ctrl.position
+        p = self._input.get_mouse_position()
         self._ac_sx.setValue(int(p[0]))
         self._ac_sy.setValue(int(p[1]))
         self._settings.saved_click_x = int(p[0])
@@ -1039,7 +1049,7 @@ class MainWindow(QMainWindow):
         save_settings(self._settings)
 
     def _tick_cursor(self) -> None:
-        p = self._mouse_ctrl.position
+        p = self._input.get_mouse_position()
         self._lbl_xy.setText(f"Курсор: X={int(p[0])} Y={int(p[1])}")
         self._settings.last_cursor_x = int(p[0])
         self._settings.last_cursor_y = int(p[1])
@@ -1795,6 +1805,7 @@ class MainWindow(QMainWindow):
         self._settings.log_to_file = self._set_log_file.isChecked()
         self._settings.jitter_percent = float(self._set_jitter.value())
         save_settings(self._settings)
+        self._presenter.notify_settings_saved()
         self._apply_theme()
         if hasattr(self, "_kb_panel"):
             self._kb_panel.set_theme(self._settings.theme)
@@ -1803,7 +1814,11 @@ class MainWindow(QMainWindow):
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, self._settings.always_on_top)
         self._apply_no_maximize_button()
         self.show()
-        setup_logging(self._settings.log_level, self._settings.log_to_file, lambda m: self.append_log.emit(m))
+        self._logging_service.configure(
+            self._settings.log_level,
+            self._settings.log_to_file,
+            lambda m: self.append_log.emit(m),
+        )
         if self._settings.minimize_to_tray:
             self._tray.show()
         else:
@@ -1812,25 +1827,6 @@ class MainWindow(QMainWindow):
         self._apply_hotkeys()
         logging.getLogger(__name__).info("Налаштування збережено")
 
-    def _build_logs_tab(self) -> QWidget:
-        w = QWidget()
-        lay = QVBoxLayout(w)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(6)
-        head = QHBoxLayout()
-        head.setSpacing(8)
-        _log_icon = QLabel()
-        _log_icon.setObjectName("sectionTitleIcon")
-        self._register_icon_widget(_log_icon, "section_logs", "section")
-        _log_title = QLabel("Журнал подій")
-        _log_title.setObjectName("logSectionTitle")
-        head.addWidget(_log_icon, 0, Qt.AlignmentFlag.AlignVCenter)
-        head.addWidget(_log_title, 0, Qt.AlignmentFlag.AlignVCenter)
-        head.addStretch(1)
-        lay.addLayout(head)
-        lay.addWidget(self._log_edit, 1)
-        return w
-
     def _build_kb_tab(self) -> QWidget:
         w = QWidget()
         lay = QHBoxLayout(w)
@@ -1838,8 +1834,8 @@ class MainWindow(QMainWindow):
         lay.setContentsMargins(0, 0, 0, 0)
         self._kb_panel = KeyboardTestPanel(self._settings.theme)
         self._mouse_panel = MouseTestPanel(self._settings.theme)
-        lay.addWidget(self._kb_panel, 5)
-        lay.addWidget(self._mouse_panel, 2)
+        lay.addWidget(self._kb_panel, 7)
+        lay.addWidget(self._mouse_panel, 3)
         return w
 
     def _on_nav_id_clicked(self, idx: int) -> None:
@@ -1862,6 +1858,8 @@ class MainWindow(QMainWindow):
         kid = self._kb_panel.normalize(name)
         if kid:
             self._kb_panel.set_key_active(kid, down)
+            if down:
+                self._kb_panel.record_key_press(kid)
 
     def _on_test_mouse_btn(self, name: str, down: bool) -> None:
         self._mouse_panel.set_btn(name, down)
@@ -1934,42 +1932,27 @@ class MainWindow(QMainWindow):
         self._update_overlay_visibility()
 
     def _apply_hotkeys(self) -> None:
-        def wrap(fn):
-            def inner() -> None:
-                try:
-                    fn()
-                except Exception:
-                    logging.getLogger(__name__).exception("Hotkey callback")
-            return inner
-
         cb = {
-            "toggle_autoclick": wrap(self._hk_toggle_ac),
-            "pause_autoclick": wrap(self._hk_pause_ac),
-            "toggle_macro_play": wrap(self._hk_toggle_macro_play),
-            "toggle_record_macro": wrap(self._hk_toggle_rec),
-            "toggle_tray": wrap(self._hk_toggle_tray),
-            "emergency_stop": wrap(self._emergency),
+            "toggle_autoclick": self._hk_toggle_ac,
+            "pause_autoclick": self._hk_pause_ac,
+            "toggle_macro_play": self._hk_toggle_macro_play,
+            "toggle_record_macro": self._hk_toggle_rec,
+            "toggle_tray": self._hk_toggle_tray,
+            "emergency_stop": self._emergency,
         }
-        self._hotkeys.stop()
-        self._win32_hotkeys.stop()
-        be = self._settings.hotkey_backend
+        hwnd = 0
         if sys.platform == "win32" and self.isVisible():
             try:
                 hwnd = int(self.winId())
             except Exception:
                 hwnd = 0
-            if hwnd and be in (HotkeyBackend.AUTO, HotkeyBackend.WIN32):
-                ok, errs = self._win32_hotkeys.register_all(hwnd, self._settings.bindings, cb)
-                if ok:
-                    logging.getLogger(__name__).info("Глобальні клавіші: Win32 RegisterHotKey")
-                    return
-                for msg in errs:
-                    logging.getLogger(__name__).warning("%s", msg)
-                if be == HotkeyBackend.WIN32:
-                    logging.getLogger(__name__).error("Win32 не вдалося; перевірте бинди")
-                    return
-        self._hotkeys.start(self._settings.bindings, cb)
-        logging.getLogger(__name__).info("Глобальні клавіші: pynput")
+        self._hotkey_manager.apply(
+            backend=self._settings.hotkey_backend,
+            hwnd=hwnd,
+            bindings=self._settings.bindings,
+            callbacks=cb,
+            log=logging.getLogger(__name__),
+        )
 
     def _hk_toggle_ac(self) -> None:
         if self._active_autoclick_state() in (AutoclickState.RUNNING, AutoclickState.PAUSED):
@@ -2002,8 +1985,7 @@ class MainWindow(QMainWindow):
             self.bring_to_front()
 
     def _emergency(self) -> None:
-        self._autoclick.stop()
-        self._seq_autoclick.stop()
+        self._clicker.stop_all()
         self._macro_engine.stop()
         if self._record_session:
             self._macro_stop_rec()
@@ -2047,7 +2029,7 @@ class MainWindow(QMainWindow):
 
                     msg = ctypes.cast(int(message), ctypes.POINTER(MSG)).contents
                     if int(msg.message) == WM_HOTKEY:
-                        self._win32_hotkeys.dispatch(int(msg.wParam))
+                        self._hotkey_manager.dispatch_win32_hotkey(int(msg.wParam))
                         return True, 0
             except Exception:
                 logging.getLogger(__name__).debug("nativeEvent", exc_info=True)
@@ -2075,10 +2057,8 @@ class MainWindow(QMainWindow):
             self._update_overlay_visibility()
             return
         self._sync_ac_settings_from_ui()
-        self._hotkeys.stop()
-        self._win32_hotkeys.stop()
-        self._autoclick.stop()
-        self._seq_autoclick.stop()
+        self._hotkey_manager.stop()
+        self._clicker.stop_all()
         self._macro_engine.stop()
         self._kb_hooks.stop()
         self._kb_panel.set_layout_tracking(False)

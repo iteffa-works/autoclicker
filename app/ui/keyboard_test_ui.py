@@ -1,15 +1,17 @@
-"""Візуальна клавіатура: сітка як у dist/keyboard.html (table + colspan)."""
+"""Візуальна клавіатура тесту: сітка 16×col, капи KeyCapWidget, NumPad окремою карточкою."""
 
 from __future__ import annotations
 
 import sys
-from collections import defaultdict
+from collections import defaultdict, deque
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QEvent, QEasingCurve, QPropertyAnimation, Qt, QTimer
+from PySide6.QtGui import QEnterEvent
 from PySide6.QtWidgets import (
+    QCheckBox,
     QFrame,
+    QGraphicsOpacityEffect,
     QGridLayout,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QScrollArea,
@@ -19,65 +21,194 @@ from PySide6.QtWidgets import (
 )
 
 from app.models.settings import ThemeMode
+from app.ui import design_tokens as DT
 from app.ui.keyboard_vk_map import KEY_ID_TO_VK_LAYOUT_ONLY
 from app.ui.theme import (
-    keyboard_fn_key_style,
+    KeyboardKeycapStyles,
     keyboard_frame_style,
-    keyboard_styles,
-    mouse_test_card_style,
+    keyboard_keycap_styles,
+    mouse_test_panel_styles,
     mouse_test_pill_style,
 )
 
-# Щільна сітка — мінімальні зазори між клавішами
-_GRID_H_SP = 1
-_GRID_V_SP = 1
-_KEY_MIN_H = 22
+
+def _key_outer_size(colspan: int, rowspan: int) -> tuple[int, int]:
+    uw, h, g = DT.KB_TEST_KEY_UNIT_W, DT.KB_TEST_KEY_H, DT.KB_TEST_GRID_GAP
+    w = colspan * uw + (colspan - 1) * g
+    hh = rowspan * h + (rowspan - 1) * g
+    return w, hh
+
+
+class KeyCapWidget(QFrame):
+    """Клавіша з hover / active і коротким fade після відпускання."""
+
+    def __init__(
+        self,
+        text: str,
+        key_id: str,
+        *,
+        width_px: int,
+        height_px: int,
+        fn_key: bool = False,
+        tooltip: str | None = None,
+    ) -> None:
+        super().__init__()
+        self.setObjectName("keyCap")
+        self._key_id = key_id
+        self._fn_key = fn_key
+        self._styles: KeyboardKeycapStyles | None = None
+        self._is_active = False
+        self._hover = False
+        self.setFixedSize(width_px, height_px)
+        self.setMouseTracking(True)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+
+        self._lbl = QLabel(text)
+        self._lbl.setObjectName("keyCapLabel")
+        self._lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._lbl.setWordWrap(True)
+        self._lbl.setMouseTracking(True)
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(8, 6, 8, 6)
+        lay.addWidget(self._lbl, 0, Qt.AlignmentFlag.AlignCenter)
+
+        self._opacity = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(self._opacity)
+        self._opacity.setOpacity(1.0)
+        self._fade = QPropertyAnimation(self._opacity, b"opacity", self)
+        self._fade.setDuration(130)
+        self._fade.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+        if tooltip:
+            self.setToolTip(tooltip)
+            self._lbl.setToolTip(tooltip)
+
+    def key_id(self) -> str:
+        return self._key_id
+
+    def set_styles(self, styles: KeyboardKeycapStyles) -> None:
+        self._styles = styles
+        self._fade.stop()
+        self._opacity.setOpacity(1.0)
+        self._apply_style()
+
+    def set_label_text(self, text: str) -> None:
+        self._lbl.setText(text)
+
+    def text(self) -> str:
+        return self._lbl.text()
+
+    def set_active(self, on: bool) -> None:
+        self._fade.stop()
+        self._is_active = on
+        if on:
+            self._opacity.setOpacity(1.0)
+            self._apply_style()
+            return
+        self._apply_style()
+        self._opacity.setOpacity(0.88)
+        self._fade.setStartValue(0.88)
+        self._fade.setEndValue(1.0)
+        self._fade.start()
+
+    def _apply_style(self) -> None:
+        if not self._styles:
+            return
+        s = self._styles
+        if self._fn_key:
+            if self._is_active:
+                self.setStyleSheet(s.fn_active)
+            elif self._hover:
+                self.setStyleSheet(s.fn_hover)
+            else:
+                self.setStyleSheet(s.fn_idle)
+        elif self._is_active:
+            self.setStyleSheet(s.active)
+        elif self._hover:
+            self.setStyleSheet(s.hover)
+        else:
+            self.setStyleSheet(s.idle)
+
+    def enterEvent(self, event: QEnterEvent) -> None:
+        self._hover = True
+        if not self._is_active:
+            self._apply_style()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event: QEvent) -> None:
+        self._hover = False
+        if not self._is_active:
+            self._apply_style()
+        super().leaveEvent(event)
+
+
+def _tooltip_for_key(default_text: str, key_id: str) -> str:
+    t = default_text.replace("\n", " ").strip()
+    if t:
+        return f"{t} ({key_id})"
+    return key_id
 
 
 class KeyboardTestPanel(QWidget):
-    """key_id → список QLabel; підписи залежать від розкладки Windows (UK/RU/EN)."""
+    """key_id → список KeyCapWidget; підписи залежать від розкладки Windows (UK/RU/EN)."""
 
     COLS = 16
+    NUM_COLS = 4
+    _HIST_MAX = 12
 
     def __init__(self, theme: ThemeMode) -> None:
         super().__init__()
+        self.setObjectName("keyboardTestRoot")
         self._theme = theme
-        self._idle, self._active = keyboard_styles(theme)
-        self._labels: dict[str, list[QLabel]] = defaultdict(list)
-        self._fn_deco_labels: list[QLabel] = []
+        self._styles = keyboard_keycap_styles(theme)
+        self._caps: dict[str, list[KeyCapWidget]] = defaultdict(list)
+        self._fn_caps: list[KeyCapWidget] = []
         self._last_hkl_seen: int | None = None
         self._layout_timer = QTimer(self)
         self._layout_timer.setInterval(280)
         self._layout_timer.timeout.connect(self._on_layout_tick)
 
+        self._hist_deque: deque[str] = deque(maxlen=self._HIST_MAX)
+
         root = QVBoxLayout(self)
-        root.setSpacing(0)
+        root.setSpacing(DT.S16)
         root.setContentsMargins(0, 0, 0, 0)
 
-        self._wrap = QWidget()
-        self._wrap.setObjectName("keyboardVisual")
-        self._wrap.setStyleSheet(keyboard_frame_style(theme))
+        hist_row = QHBoxLayout()
+        hist_row.setSpacing(DT.S8)
+        self._hist_check = QCheckBox("Історія натискань")
+        self._hist_check.setToolTip("Показувати останні натискання клавіш")
+        hist_row.addWidget(self._hist_check)
+        self._hist_chips_host = QWidget()
+        self._hist_chips_layout = QHBoxLayout(self._hist_chips_host)
+        self._hist_chips_layout.setContentsMargins(0, 0, 0, 0)
+        self._hist_chips_layout.setSpacing(6)
+        self._hist_chips_layout.addStretch(1)
+        hist_row.addWidget(self._hist_chips_host, 1)
+        root.addLayout(hist_row)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        scroll.setWidget(self._wrap)
 
-        root.addWidget(scroll, 1)
+        self._wrap = QWidget()
+        self._wrap.setObjectName("keyboardVisual")
+        inner = QVBoxLayout(self._wrap)
+        inner.setSpacing(DT.S16)
+        inner.setContentsMargins(DT.S8, DT.S8, DT.S8, DT.S8)
 
-        body = QHBoxLayout(self._wrap)
-        body.setSpacing(2)
-        body.setContentsMargins(2, 2, 2, 2)
-
-        main_grid = QGridLayout()
-        main_grid.setHorizontalSpacing(_GRID_H_SP)
-        main_grid.setVerticalSpacing(_GRID_V_SP)
+        main_holder = QWidget()
+        main_grid = QGridLayout(main_holder)
+        main_grid.setHorizontalSpacing(DT.KB_TEST_GRID_GAP)
+        main_grid.setVerticalSpacing(DT.KB_TEST_GRID_GAP)
         main_grid.setContentsMargins(0, 0, 0, 0)
         for c in range(self.COLS):
-            main_grid.setColumnStretch(c, 1)
+            main_grid.setColumnMinimumWidth(c, DT.KB_TEST_KEY_UNIT_W)
+            main_grid.setColumnStretch(c, 0)
 
         r = 0
         c = 0
@@ -176,7 +307,7 @@ class KeyboardTestPanel(QWidget):
 
         r += 1
         c = 0
-        self._gadd_deco(main_grid, r, c, 1, 2, "Fn", theme, fn_blue=True)
+        self._gadd_deco(main_grid, r, c, 1, 2, "Fn", fn_blue=True)
         c += 2
         self._gadd(main_grid, r, c, 1, 1, "Ctrl", "ctrl_l")
         c += 1
@@ -200,41 +331,72 @@ class KeyboardTestPanel(QWidget):
         c += 1
         self._gadd(main_grid, r, c, 1, 1, "▶", "right")
 
-        body.addLayout(main_grid, 1)
+        inner.addWidget(main_holder, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
 
-        num_box = QGroupBox("Numpad")
-        num_box.setObjectName("kbdNumpadGroup")
-        ngrid = QGridLayout(num_box)
-        ngrid.setContentsMargins(2, 2, 2, 2)
-        ngrid.setHorizontalSpacing(_GRID_H_SP)
-        ngrid.setVerticalSpacing(_GRID_V_SP)
+        num_card = QFrame()
+        num_card.setObjectName("kbdNumpadCard")
+        num_lay = QVBoxLayout(num_card)
+        num_lay.setContentsMargins(DT.S16, DT.S16, DT.S16, DT.S16)
+        num_lay.setSpacing(DT.S8)
+        nt = QLabel("Numpad")
+        nt.setObjectName("kbdNumpadTitle")
+        num_lay.addWidget(nt)
+        ngrid = QGridLayout()
+        ngrid.setHorizontalSpacing(DT.KB_TEST_GRID_GAP)
+        ngrid.setVerticalSpacing(DT.KB_TEST_GRID_GAP)
+        for c in range(self.NUM_COLS):
+            ngrid.setColumnMinimumWidth(c, DT.KB_TEST_KEY_UNIT_W)
+            ngrid.setColumnStretch(c, 0)
 
-        ngrid.addWidget(self._make_key_label("Num\nLock", "num_lock"), 0, 0)
-        ngrid.addWidget(self._make_key_label("/", "numpad_divide"), 0, 1)
-        ngrid.addWidget(self._make_key_label("*", "numpad_multiply"), 0, 2)
-        ngrid.addWidget(self._make_key_label("−", "numpad_subtract"), 0, 3)
+        ngrid.addWidget(self._make_key_cap("Num\nLock", "num_lock", 1, 1), 0, 0)
+        ngrid.addWidget(self._make_key_cap("/", "numpad_divide", 1, 1), 0, 1)
+        ngrid.addWidget(self._make_key_cap("*", "numpad_multiply", 1, 1), 0, 2)
+        ngrid.addWidget(self._make_key_cap("−", "numpad_subtract", 1, 1), 0, 3)
 
-        ngrid.addWidget(self._make_key_label("7\nHome", "numpad7"), 1, 0)
-        ngrid.addWidget(self._make_key_label("8\n▲", "numpad8"), 1, 1)
-        ngrid.addWidget(self._make_key_label("9\nPgUp", "numpad9"), 1, 2)
-        ngrid.addWidget(self._make_key_label("+", "numpad_add"), 1, 3, 2, 1)
+        ngrid.addWidget(self._make_key_cap("7\nHome", "numpad7", 1, 1), 1, 0)
+        ngrid.addWidget(self._make_key_cap("8\n▲", "numpad8", 1, 1), 1, 1)
+        ngrid.addWidget(self._make_key_cap("9\nPgUp", "numpad9", 1, 1), 1, 2)
+        ngrid.addWidget(self._make_key_cap("+", "numpad_add", 1, 2), 1, 3, 2, 1)
 
-        ngrid.addWidget(self._make_key_label("4\n◀", "numpad4"), 2, 0)
-        ngrid.addWidget(self._make_key_label("5", "numpad5"), 2, 1)
-        ngrid.addWidget(self._make_key_label("6\n▶", "numpad6"), 2, 2)
+        ngrid.addWidget(self._make_key_cap("4\n◀", "numpad4", 1, 1), 2, 0)
+        ngrid.addWidget(self._make_key_cap("5", "numpad5", 1, 1), 2, 1)
+        ngrid.addWidget(self._make_key_cap("6\n▶", "numpad6", 1, 1), 2, 2)
 
-        ngrid.addWidget(self._make_key_label("1\nEnd", "numpad1"), 3, 0)
-        ngrid.addWidget(self._make_key_label("2\n▼", "numpad2"), 3, 1)
-        ngrid.addWidget(self._make_key_label("3\nPgDn", "numpad3"), 3, 2)
-        ngrid.addWidget(self._make_key_label("Enter", "enter"), 3, 3, 2, 1)
+        ngrid.addWidget(self._make_key_cap("1\nEnd", "numpad1", 1, 1), 3, 0)
+        ngrid.addWidget(self._make_key_cap("2\n▼", "numpad2", 1, 1), 3, 1)
+        ngrid.addWidget(self._make_key_cap("3\nPgDn", "numpad3", 1, 1), 3, 2)
+        ngrid.addWidget(self._make_key_cap("Enter", "enter", 1, 2), 3, 3, 2, 1)
 
-        ngrid.addWidget(self._make_key_label("0\nIns", "numpad0"), 4, 0, 1, 2)
-        ngrid.addWidget(self._make_key_label(".\nDel", "decimal"), 4, 2)
+        ngrid.addWidget(self._make_key_cap("0\nIns", "numpad0", 2, 1), 4, 0, 1, 2)
+        ngrid.addWidget(self._make_key_cap(".\nDel", "decimal", 1, 1), 4, 2)
 
-        body.addWidget(num_box, 0)
+        num_lay.addLayout(ngrid)
+        inner.addWidget(num_card, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+
+        scroll.setWidget(self._wrap)
+        root.addWidget(scroll, 1)
+
+        self.setStyleSheet(keyboard_frame_style(theme))
+        self._apply_styles_to_caps()
 
         if sys.platform == "win32":
             self._apply_win_layout_labels()
+
+    def _apply_styles_to_caps(self) -> None:
+        for caps in self._caps.values():
+            for cap in caps:
+                cap.set_styles(self._styles)
+        for cap in self._fn_caps:
+            cap.set_styles(self._styles)
+
+    def _make_key_cap(self, text: str, key_id: str, colspan: int, rowspan: int) -> KeyCapWidget:
+        w, h = _key_outer_size(colspan, rowspan)
+        tip = _tooltip_for_key(text, key_id)
+        cap = KeyCapWidget(text, key_id, width_px=w, height_px=h, fn_key=False, tooltip=tip)
+        cap.set_styles(self._styles)
+        cap.setProperty("defaultText", text)
+        self._caps[key_id].append(cap)
+        return cap
 
     def _gadd(
         self,
@@ -246,7 +408,7 @@ class KeyboardTestPanel(QWidget):
         text: str,
         key_id: str,
     ) -> None:
-        grid.addWidget(self._make_key_label(text, key_id), row, col, rowspan, colspan)
+        grid.addWidget(self._make_key_cap(text, key_id, colspan, rowspan), row, col, rowspan, colspan)
 
     def _gadd_deco(
         self,
@@ -256,37 +418,17 @@ class KeyboardTestPanel(QWidget):
         rowspan: int,
         colspan: int,
         text: str,
-        theme: ThemeMode,
         *,
         fn_blue: bool = False,
     ) -> None:
-        lab = QLabel(text)
-        lab.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lab.setMinimumHeight(_KEY_MIN_H)
-        lab.setFixedHeight(_KEY_MIN_H)
-        lab.setMinimumWidth(0)
-        lab.setWordWrap(True)
-        lab.setObjectName("kbdKeyFn" if fn_blue else "kbdKey")
-        lab.setStyleSheet(keyboard_fn_key_style(theme) if fn_blue else self._idle)
-        lab.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        if fn_blue:
-            self._fn_deco_labels.append(lab)
-        grid.addWidget(lab, row, col, rowspan, colspan)
-
-    def _make_key_label(self, text: str, key_id: str) -> QLabel:
-        lab = QLabel(text)
-        lab.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lab.setMinimumHeight(_KEY_MIN_H)
-        lab.setFixedHeight(_KEY_MIN_H)
-        lab.setMinimumWidth(0)
-        lab.setWordWrap(True)
-        lab.setStyleSheet(self._idle)
-        lab.setProperty("keyId", key_id)
-        lab.setProperty("defaultText", text)
-        lab.setObjectName("kbdKey")
-        lab.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        self._labels[key_id].append(lab)
-        return lab
+        w, h = _key_outer_size(colspan, rowspan)
+        tip = _tooltip_for_key(text, "fn")
+        cap = KeyCapWidget(text, "fn", width_px=w, height_px=h, fn_key=True, tooltip=tip)
+        cap.set_styles(self._styles)
+        cap.setProperty("defaultText", text)
+        self._fn_caps.append(cap)
+        self._caps["fn"].append(cap)
+        grid.addWidget(cap, row, col, rowspan, colspan)
 
     def _apply_win_layout_labels(self) -> None:
         if sys.platform != "win32":
@@ -294,16 +436,16 @@ class KeyboardTestPanel(QWidget):
         from app.ui.keyboard_layout_win import display_labels_for_vks
 
         labels = display_labels_for_vks(KEY_ID_TO_VK_LAYOUT_ONLY)
-        for kid, labs in self._labels.items():
+        for kid, caps in self._caps.items():
             if kid not in KEY_ID_TO_VK_LAYOUT_ONLY:
                 continue
             ch = labels.get(kid, "")
-            for lab in labs:
+            for cap in caps:
                 if ch:
-                    lab.setText(ch)
+                    cap.set_label_text(ch)
                 else:
-                    dt = lab.property("defaultText")
-                    lab.setText(dt if isinstance(dt, str) else lab.text())
+                    dt = cap.property("defaultText")
+                    cap.set_label_text(dt if isinstance(dt, str) else cap.text())
 
     def _on_layout_tick(self) -> None:
         if not self.isVisible() or sys.platform != "win32":
@@ -330,14 +472,9 @@ class KeyboardTestPanel(QWidget):
 
     def set_theme(self, theme: ThemeMode) -> None:
         self._theme = theme
-        self._idle, self._active = keyboard_styles(theme)
-        self._wrap.setStyleSheet(keyboard_frame_style(theme))
-        fn_st = keyboard_fn_key_style(theme)
-        for labs in self._labels.values():
-            for lab in labs:
-                lab.setStyleSheet(self._idle)
-        for lab in self._fn_deco_labels:
-            lab.setStyleSheet(fn_st)
+        self._styles = keyboard_keycap_styles(theme)
+        self.setStyleSheet(keyboard_frame_style(theme))
+        self._apply_styles_to_caps()
 
     def normalize(self, name: str) -> str | None:
         n = name.lower().strip()
@@ -362,17 +499,33 @@ class KeyboardTestPanel(QWidget):
             return n
         if n.startswith("f") and n[1:].isdigit():
             return n
-        if n in self._labels:
+        if n in self._caps:
             return n
         return None
 
     def set_key_active(self, key_id: str, active: bool) -> None:
-        labs = self._labels.get(key_id)
-        if not labs:
+        caps = self._caps.get(key_id)
+        if not caps:
             return
-        ss = self._active if active else self._idle
-        for lab in labs:
-            lab.setStyleSheet(ss)
+        for cap in caps:
+            cap.set_active(active)
+
+    def record_key_press(self, key_id: str) -> None:
+        if not self._hist_check.isChecked():
+            return
+        self._hist_deque.append(key_id)
+        self._refresh_hist_chips()
+
+    def _refresh_hist_chips(self) -> None:
+        while self._hist_chips_layout.count():
+            item = self._hist_chips_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        for kid in self._hist_deque:
+            lab = QLabel(kid)
+            lab.setObjectName("kbHistChip")
+            self._hist_chips_layout.addWidget(lab)
+        self._hist_chips_layout.addStretch(1)
 
 
 class MouseTestPanel(QWidget):
@@ -383,59 +536,98 @@ class MouseTestPanel(QWidget):
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(DT.S16)
 
-        self._card = QFrame()
-        self._card.setObjectName("mouseTestCard")
-        inner = QVBoxLayout(self._card)
-        inner.setContentsMargins(8, 8, 8, 8)
-        inner.setSpacing(4)
-
-        title = QLabel("Миша")
-        title.setObjectName("mouseTestTitle")
-
-        self.lbl_pos = QLabel("X: 0    Y: 0")
-        self.lbl_pos.setObjectName("mouseTestCoords")
-
+        card_mouse = QFrame()
+        card_mouse.setObjectName("kbTestCard")
+        cm = QVBoxLayout(card_mouse)
+        cm.setContentsMargins(DT.S16, DT.S16, DT.S16, DT.S16)
+        cm.setSpacing(DT.S8)
+        t1 = QLabel("Миша")
+        t1.setObjectName("kbTestCardTitle")
         self._pill_l = QLabel("відпущено")
         self._pill_r = QLabel("відпущено")
         self._pill_m = QLabel("відпущено")
         for p in (self._pill_l, self._pill_r, self._pill_m):
             p.setObjectName("mouseTestPill")
-
-        row_l = QHBoxLayout()
+        row_btns = QHBoxLayout()
+        row_btns.setSpacing(DT.S8)
         lb_l = QLabel("ЛКМ")
         lb_l.setObjectName("mouseTestLbl")
-        row_l.addWidget(lb_l)
-        row_l.addWidget(self._pill_l, 1)
-
-        row_r = QHBoxLayout()
         lb_r = QLabel("ПКМ")
         lb_r.setObjectName("mouseTestLbl")
-        row_r.addWidget(lb_r)
-        row_r.addWidget(self._pill_r, 1)
-
-        row_m = QHBoxLayout()
         lb_m = QLabel("СКМ")
         lb_m.setObjectName("mouseTestLbl")
-        row_m.addWidget(lb_m)
-        row_m.addWidget(self._pill_m, 1)
+        row_btns.addWidget(lb_l)
+        row_btns.addWidget(self._pill_l, 1)
+        row_btns.addWidget(lb_r)
+        row_btns.addWidget(self._pill_r, 1)
+        row_btns.addWidget(lb_m)
+        row_btns.addWidget(self._pill_m, 1)
+        cm.addWidget(t1)
+        cm.addLayout(row_btns)
 
-        self.lbl_scroll = QLabel("Скрол: dx=0  dy=0")
-        self.lbl_scroll.setObjectName("mouseTestScroll")
+        card_xy = QFrame()
+        card_xy.setObjectName("kbTestCard")
+        cx = QVBoxLayout(card_xy)
+        cx.setContentsMargins(DT.S16, DT.S16, DT.S16, DT.S16)
+        cx.setSpacing(DT.S8)
+        t2 = QLabel("Координати")
+        t2.setObjectName("kbTestCardTitle")
+        g = QGridLayout()
+        g.setHorizontalSpacing(DT.S16)
+        g.setVerticalSpacing(4)
+        lx = QLabel("X")
+        lx.setObjectName("mouseCoordLabel")
+        ly = QLabel("Y")
+        ly.setObjectName("mouseCoordLabel")
+        self._lbl_x = QLabel("0")
+        self._lbl_y = QLabel("0")
+        self._lbl_x.setObjectName("mouseCoordValue")
+        self._lbl_y.setObjectName("mouseCoordValue")
+        g.addWidget(lx, 0, 0)
+        g.addWidget(self._lbl_x, 0, 1)
+        g.addWidget(ly, 1, 0)
+        g.addWidget(self._lbl_y, 1, 1)
+        cx.addWidget(t2)
+        cx.addLayout(g)
 
-        inner.addWidget(title)
-        inner.addWidget(self.lbl_pos)
-        inner.addLayout(row_l)
-        inner.addLayout(row_r)
-        inner.addLayout(row_m)
-        inner.addWidget(self.lbl_scroll)
+        card_sc = QFrame()
+        card_sc.setObjectName("kbTestCard")
+        cs = QVBoxLayout(card_sc)
+        cs.setContentsMargins(DT.S16, DT.S16, DT.S16, DT.S16)
+        cs.setSpacing(DT.S8)
+        t3 = QLabel("Скрол")
+        t3.setObjectName("kbTestCardTitle")
+        row_s = QHBoxLayout()
+        row_s.setSpacing(DT.S16)
+        self._lbl_dx = QLabel("0")
+        self._lbl_dy = QLabel("0")
+        self._lbl_dx.setObjectName("mouseScrollValue")
+        self._lbl_dy.setObjectName("mouseScrollValue")
+        dl = QLabel("dx")
+        dl.setObjectName("mouseScrollLabel")
+        dr = QLabel("dy")
+        dr.setObjectName("mouseScrollLabel")
+        row_s.addWidget(dl)
+        row_s.addWidget(self._lbl_dx)
+        row_s.addWidget(dr)
+        row_s.addWidget(self._lbl_dy)
+        row_s.addStretch(1)
+        cs.addWidget(t3)
+        cs.addLayout(row_s)
 
-        root.addWidget(self._card)
+        root.addWidget(card_mouse)
+        root.addWidget(card_xy)
+        root.addWidget(card_sc)
+        root.addStretch(1)
+
         self.set_theme(theme)
 
     def set_theme(self, theme: ThemeMode) -> None:
         self._theme = theme
-        self._card.setStyleSheet(mouse_test_card_style(theme))
+        ss = mouse_test_panel_styles(theme)
+        self.setStyleSheet(ss)
         self._apply_pills()
 
     def _apply_pills(self) -> None:
@@ -448,7 +640,8 @@ class MouseTestPanel(QWidget):
         self._pill_m.setText("натиснуто" if self._down["middle"] else "відпущено")
 
     def set_pos(self, x: int, y: int) -> None:
-        self.lbl_pos.setText(f"X: {x}  Y: {y}")
+        self._lbl_x.setText(str(x))
+        self._lbl_y.setText(str(y))
 
     def set_btn(self, name: str, down: bool) -> None:
         if name == "left":
@@ -460,4 +653,5 @@ class MouseTestPanel(QWidget):
         self._apply_pills()
 
     def set_scroll(self, dx: int, dy: int) -> None:
-        self.lbl_scroll.setText(f"Скрол: dx={dx}  dy={dy}")
+        self._lbl_dx.setText(str(dx))
+        self._lbl_dy.setText(str(dy))

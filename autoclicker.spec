@@ -16,6 +16,9 @@ a = Analysis(
     binaries=[],
     datas=[
         (str(root / "config" / "settings.example.json"), "config"),
+        (str(root / "config" / "clicker.example.json"), "config"),
+        (str(root / "config" / "binds.example.json"), "config"),
+        (str(root / "config" / "macros.example.json"), "config"),
         (str(root / "config" / "plugin.json"), "config"),
         (str(root / "data" / "macros" / "example_macro.json"), "data/macros"),
         (str(root / "assets" / "icons"), "assets/icons"),

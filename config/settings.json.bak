@@ -1,0 +1,73 @@
+{
+  "theme": "dark",
+  "ui_language": "uk",
+  "always_on_top": false,
+  "sound_on_start_stop": false,
+  "minimize_to_tray": true,
+  "close_to_tray": false,
+  "hotkey_backend": "auto",
+  "overlay_opacity": 0.92,
+  "autosave_macros": true,
+  "autosave_interval_sec": 30,
+  "macros_folder": "",
+  "log_level": "INFO",
+  "log_to_file": false,
+  "jitter_percent": 10.0,
+  "timing_precision_ms": 1.0,
+  "last_cursor_x": 1438,
+  "last_cursor_y": 21,
+  "saved_click_x": 0,
+  "saved_click_y": 0,
+  "profile_name": "default",
+  "recording_profiles": [
+    {
+      "id": "default",
+      "name": "Повний (клавіатура + миша)",
+      "record_mouse_move": false,
+      "record_keyboard": true,
+      "record_mouse_clicks": true,
+      "record_scroll": true,
+      "filter_binding_chords": true
+    },
+    {
+      "id": "keys_only",
+      "name": "Лише клавіатура",
+      "record_mouse_move": false,
+      "record_keyboard": true,
+      "record_mouse_clicks": false,
+      "record_scroll": false,
+      "filter_binding_chords": true
+    }
+  ],
+  "active_recording_profile_id": "default",
+  "bindings": {
+    "toggle_autoclick": {
+      "modifiers": [],
+      "key": "f6"
+    },
+    "pause_autoclick": {
+      "modifiers": [],
+      "key": "f8"
+    },
+    "toggle_macro_play": null,
+    "toggle_record_macro": null,
+    "toggle_tray": null,
+    "emergency_stop": {
+      "modifiers": [],
+      "key": "escape"
+    }
+  },
+  "infinite_loop_confirmed": false,
+  "autoclick_work_mode": "simple",
+  "autoclick_sequence_steps": [],
+  "autoclick_key_repeat_key": "e",
+  "sequence_repeat_mode": "full",
+  "sequence_step_index": 0,
+  "sequence_loop_infinite": true,
+  "ac_humanize_enabled": false,
+  "ac_jitter_gaussian": false,
+  "ac_pause_chance_percent": 1.0,
+  "ac_pause_extra_ms": 221.0,
+  "ac_micro_move_px": 2,
+  "ac_pre_click_delay_ms_max": 0.0
+}

@@ -11,6 +11,7 @@ from pynput.keyboard import Key, KeyCode
 from pynput.keyboard import Controller as KeyboardController
 from pynput.mouse import Button, Controller as MouseController
 
+from app.core.event_bus import AppEvent, EventBus, EventType
 from app.core.state import AutoclickState
 from app.models.autoclick_sequence import AutoclickSequenceStep, AutoclickSequenceStepType, SequenceRepeatMode
 from app.utils.timing import monotonic_now, sleep_until_deadline
@@ -86,7 +87,8 @@ class SequenceAutoclickConfig:
 
 
 class SequenceAutoclickerEngine:
-    def __init__(self) -> None:
+    def __init__(self, event_bus: EventBus | None = None) -> None:
+        self._bus = event_bus
         self._mouse = MouseController()
         self._kb = KeyboardController()
         self._thread: threading.Thread | None = None
@@ -136,6 +138,8 @@ class SequenceAutoclickerEngine:
             if self._thread and self._thread.is_alive():
                 self._pause.set()
                 self._state = AutoclickState.RUNNING
+                if self._bus:
+                    self._bus.publish(AppEvent(EventType.CLICK_RESUMED))
                 return
             self._stop.clear()
             self._pause.set()
@@ -146,16 +150,22 @@ class SequenceAutoclickerEngine:
                 daemon=True,
             )
             self._thread.start()
+        if self._bus:
+            self._bus.publish(AppEvent(EventType.CLICK_STARTED))
 
     def pause(self) -> None:
         with self._lock:
             self._pause.clear()
             self._state = AutoclickState.PAUSED
+        if self._bus:
+            self._bus.publish(AppEvent(EventType.CLICK_PAUSED))
 
     def resume(self) -> None:
         with self._lock:
             self._pause.set()
             self._state = AutoclickState.RUNNING
+        if self._bus:
+            self._bus.publish(AppEvent(EventType.CLICK_RESUMED))
 
     def stop(self) -> None:
         with self._lock:
@@ -198,6 +208,8 @@ class SequenceAutoclickerEngine:
         finally:
             with self._lock:
                 self._state = AutoclickState.STOPPED
+            if self._bus:
+                self._bus.publish(AppEvent(EventType.CLICK_STOPPED))
 
     def _run_sequence(self) -> None:
         try:
@@ -225,6 +237,8 @@ class SequenceAutoclickerEngine:
         finally:
             with self._lock:
                 self._state = AutoclickState.STOPPED
+            if self._bus:
+                self._bus.publish(AppEvent(EventType.CLICK_STOPPED))
 
     def _exec_step(self, st: AutoclickSequenceStep) -> None:
         if st.type == AutoclickSequenceStepType.DELAY:

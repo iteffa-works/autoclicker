@@ -39,6 +39,18 @@ def settings_path() -> Path:
     return config_dir() / "settings.json"
 
 
+def clicker_config_path() -> Path:
+    return config_dir() / "clicker.json"
+
+
+def binds_config_path() -> Path:
+    return config_dir() / "binds.json"
+
+
+def macros_meta_path() -> Path:
+    return config_dir() / "macros.json"
+
+
 def assets_dir() -> Path:
     if getattr(sys, "frozen", False):
         me = getattr(sys, "_MEIPASS", None)

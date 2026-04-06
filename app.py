@@ -1,4 +1,4 @@
-"""Application entry point (PyInstaller; delegates to app.bootstrap)."""
+"""Alternate entry: `python app.py` (package `app/` remains the main codebase)."""
 
 from __future__ import annotations
 

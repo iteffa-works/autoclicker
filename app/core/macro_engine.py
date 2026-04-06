@@ -10,6 +10,7 @@ from pynput import keyboard, mouse
 from pynput.keyboard import Key, KeyCode
 from pynput.mouse import Button, Controller as MouseController
 
+from app.core.event_bus import AppEvent, EventBus, EventType
 from app.core.state import AppRunState
 from app.models.bindings import BindingsConfig
 from app.models.macro import MacroDefinition, MacroEvent, MacroEventType, MacroSpeedMode
@@ -240,7 +241,8 @@ class MacroRecordSession:
 class MacroEngine:
     """Playback in a worker thread."""
 
-    def __init__(self) -> None:
+    def __init__(self, event_bus: EventBus | None = None) -> None:
+        self._bus = event_bus
         self._mouse = MouseController()
         self._kb = keyboard.Controller()
         self._thread: threading.Thread | None = None
@@ -267,6 +269,8 @@ class MacroEngine:
         self.stop()
         self._stop.clear()
         self._state = AppRunState.PLAYING_MACRO
+        if self._bus:
+            self._bus.publish(AppEvent(EventType.MACRO_PLAY_STARTED))
 
         def run() -> None:
             try:
@@ -281,6 +285,8 @@ class MacroEngine:
                     i += 1
             finally:
                 self._state = AppRunState.IDLE
+                if self._bus:
+                    self._bus.publish(AppEvent(EventType.MACRO_PLAY_STOPPED))
                 if callable(on_finished):
                     on_finished()
 

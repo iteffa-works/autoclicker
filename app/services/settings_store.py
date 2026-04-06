@@ -1,25 +1,14 @@
-"""Load/save application settings."""
+"""Load/save application settings (delegates to split config repository)."""
 
 from __future__ import annotations
 
-from app.models.bindings import HotkeyChord
 from app.models.settings import AppSettings
-from app.utils.json_io import read_json, write_json
-from app.utils.paths import settings_path
+from app.services.config_repository import load_merged_settings, save_merged_settings
 
 
 def load_settings() -> AppSettings:
-    path = settings_path()
-    raw = read_json(path, {})
-    if not raw:
-        s = AppSettings()
-        s.bindings.emergency_stop = HotkeyChord((), "escape")
-        return s
-    s = AppSettings.from_dict(raw)
-    if s.bindings.emergency_stop is None:
-        s.bindings.emergency_stop = HotkeyChord((), "escape")
-    return s
+    return load_merged_settings()
 
 
 def save_settings(settings: AppSettings) -> None:
-    write_json(settings_path(), settings.to_dict())
+    save_merged_settings(settings)

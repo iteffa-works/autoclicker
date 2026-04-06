@@ -67,6 +67,7 @@ class AppSettings:
     ac_pause_extra_ms: float = 220.0
     ac_micro_move_px: int = 0
     ac_pre_click_delay_ms_max: float = 0.0
+    macro_last_selected: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -106,6 +107,7 @@ class AppSettings:
             "ac_pause_extra_ms": self.ac_pause_extra_ms,
             "ac_micro_move_px": self.ac_micro_move_px,
             "ac_pre_click_delay_ms_max": self.ac_pre_click_delay_ms_max,
+            "macro_last_selected": self.macro_last_selected,
         }
 
     @classmethod
@@ -160,4 +162,5 @@ class AppSettings:
             ac_pause_extra_ms=float(data.get("ac_pause_extra_ms", 220.0)),
             ac_micro_move_px=int(data.get("ac_micro_move_px", 0)),
             ac_pre_click_delay_ms_max=float(data.get("ac_pre_click_delay_ms_max", 0.0)),
+            macro_last_selected=str(data.get("macro_last_selected", "")),
         )

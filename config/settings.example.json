@@ -14,32 +14,8 @@
   "log_to_file": false,
   "jitter_percent": 10.0,
   "timing_precision_ms": 1.0,
-  "last_cursor_x": 0,
-  "last_cursor_y": 0,
-  "saved_click_x": 100,
-  "saved_click_y": 100,
   "profile_name": "default",
   "infinite_loop_confirmed": false,
   "recording_profiles": [],
-  "active_recording_profile_id": "default",
-  "autoclick_work_mode": "simple",
-  "autoclick_sequence_steps": [],
-  "autoclick_key_repeat_key": "e",
-  "sequence_repeat_mode": "full",
-  "sequence_step_index": 0,
-  "sequence_loop_infinite": true,
-  "ac_humanize_enabled": false,
-  "ac_jitter_gaussian": false,
-  "ac_pause_chance_percent": 0.0,
-  "ac_pause_extra_ms": 220.0,
-  "ac_micro_move_px": 0,
-  "ac_pre_click_delay_ms_max": 0.0,
-  "bindings": {
-    "toggle_autoclick": null,
-    "pause_autoclick": null,
-    "toggle_macro_play": null,
-    "toggle_record_macro": null,
-    "toggle_tray": null,
-    "emergency_stop": { "modifiers": [], "key": "escape" }
-  }
+  "active_recording_profile_id": "default"
 }

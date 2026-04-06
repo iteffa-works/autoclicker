@@ -25,6 +25,20 @@ pip install -r requirements.txt
 python main.py
 ```
 
+Альтернатива: `python app.py` (точка входу в корені; пакет коду — `app/`).
+
+## Архітектура (скорочено)
+
+- **`app/core/`** — автоклікер, послідовність, макроси, `EventBus`, фасад `UnifiedClickerEngine`, `InputEngine`.
+- **`app/services/`** — конфіги (`config_repository`), логування (`LoggingService`), хоткеї (`HotkeyManager`), оновлення (`UpdateService`).
+- **`app/ui/`** — лише Qt; головне вікно підписане на події з `EventBus` для оновлення статусу.
+- **`app/presenter.py`** — точка розширення оркестрації (сповіщення про збереження тощо).
+- **`app/bootstrap.py`** — ініціалізація Qt і `main()`.
+
+Конфігурація розбита на файли в `config/`: `settings.json`, `clicker.json`, `binds.json`, `macros.json`. Старий монолітний `settings.json` при першому запуску мігрує автоматично (резервна копія `settings.json.bak`). Приклади: `*.example.json`.
+
+Перевірка оновлень з GitHub: `UpdateService(owner, repo).fetch_latest()` — задайте репозиторій релізів у коді або розширте виклик з UI.
+
 ## Збірка одного портативного `.exe` (onefile)
 
 ```text
@@ -43,11 +57,14 @@ python -m PyInstaller --clean --noconfirm autoclicker.spec
 |------|-------------|
 | `assets/icons/favicon.png`, `assets/icons/favicon.ico` | Іконка вікна, трею та збірки `.exe` |
 | `assets/images/character.png` | Декоративне зображення в лівій панелі головного вікна |
-| `config/settings.json` | Налаштування (створюється автоматично) |
+| `config/settings.json` | Тема, мова, трей, лог, джитер, профілі запису тощо |
+| `config/clicker.json` | Режими автокліку, координати, послідовність, humanize |
+| `config/binds.json` | Глобальні гарячі клавіші |
+| `config/macros.json` | Метадані макросів (наприклад останній вибраний файл) |
 | `config/plugin.json` | Метадані студії та версія (дублює дані в коді) |
 | `data/macros/*.json` | Збережені макроси |
 
-Приклади: `config/settings.example.json`, `data/macros/example_macro.json`.
+Приклади: `config/settings.example.json`, `config/clicker.example.json`, `config/binds.example.json`, `config/macros.example.json`, `data/macros/example_macro.json`.
 
 ## Права та безпека
 

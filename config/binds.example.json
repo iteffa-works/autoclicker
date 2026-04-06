@@ -1,0 +1,8 @@
+{
+  "toggle_autoclick": null,
+  "pause_autoclick": null,
+  "toggle_macro_play": null,
+  "toggle_record_macro": null,
+  "toggle_tray": null,
+  "emergency_stop": { "modifiers": [], "key": "escape" }
+}
