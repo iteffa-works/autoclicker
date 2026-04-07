@@ -210,31 +210,53 @@ def stylesheet_for(theme: ThemeMode) -> str:
         }}
         QLabel#headerTitle {{ color: {tp}; font-size: 15px; font-weight: 600; }}
         QWidget#appFooter {{
-            background: #0A0F18;
-            border-top: 1px solid #DC2626;
-            min-height: 34px;
+            background: {bg};
+            border-top: 1px solid rgba(148, 163, 184, 0.22);
+            min-height: 44px;
         }}
         QLabel#footerSecondary {{
-            color: {td};
-            font-size: 11px;
+            color: {ts};
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            background: transparent;
+            padding: 4px 0px;
         }}
         QLabel#footerStatusLabel {{
             color: {ts};
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 500;
-            padding: 4px 12px;
-            border-radius: 6px;
-            background: {surf2};
+            padding: 5px 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            background: rgba(30, 41, 59, 0.55);
         }}
-        QLabel#footerStatusLabel[state="running"] {{ color: {ok}; background: rgba(34,197,94,0.12); }}
-        QLabel#footerStatusLabel[state="paused"] {{ color: {warn}; background: rgba(245,158,11,0.12); }}
-        QLabel#footerStatusLabel[state="macro"] {{ color: {ach}; background: rgba(99,102,241,0.15); }}
+        QLabel#footerStatusLabel[state="idle"] {{
+            color: {td};
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            background: rgba(30, 41, 59, 0.4);
+        }}
+        QLabel#footerStatusLabel[state="running"] {{
+            color: {ok};
+            border: 1px solid rgba(34, 197, 94, 0.35);
+            background: rgba(34, 197, 94, 0.1);
+        }}
+        QLabel#footerStatusLabel[state="paused"] {{
+            color: {warn};
+            border: 1px solid rgba(245, 158, 11, 0.35);
+            background: rgba(245, 158, 11, 0.1);
+        }}
+        QLabel#footerStatusLabel[state="macro"] {{
+            color: {ach};
+            border: 1px solid rgba(99, 102, 241, 0.35);
+            background: rgba(99, 102, 241, 0.12);
+        }}
         QWidget#brandingPanel {{
-            background: #0A0F18;
+            background: {bg};
         }}
         QFrame#sidebarVerticalDivider {{
             border: none;
-            background: #DC2626;
+            background: rgba(99, 102, 241, 0.45);
             max-width: 2px;
             min-width: 2px;
         }}
@@ -243,7 +265,7 @@ def stylesheet_for(theme: ThemeMode) -> str:
         }}
         QFrame#brandDivider {{
             border: none;
-            background: #DC2626;
+            background: rgba(99, 102, 241, 0.4);
             max-height: 2px;
         }}
         QLabel#brandTitle {{
@@ -297,6 +319,24 @@ def stylesheet_for(theme: ThemeMode) -> str:
         }}
         QLabel#brandLink {{
             font-size: 12px;
+        }}
+        QWidget#brandSocialRow {{
+            background: transparent;
+        }}
+        QToolButton#brandSocialButton {{
+            background: rgba(30, 41, 59, 0.9);
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            border-radius: 22px;
+            min-width: 44px;
+            min-height: 44px;
+            padding: 0px;
+        }}
+        QToolButton#brandSocialButton:hover {{
+            background: rgba(51, 65, 85, 0.95);
+            border: 1px solid rgba(148, 163, 184, 0.38);
+        }}
+        QToolButton#brandSocialButton:pressed {{
+            background: rgba(15, 23, 42, 0.95);
         }}
         QLabel#brandVersion {{
             color: {td};
@@ -674,31 +714,52 @@ def stylesheet_for(theme: ThemeMode) -> str:
         }}
         QLabel#headerTitle {{ color: {tp}; font-size: 15px; font-weight: 600; }}
         QWidget#appFooter {{
-            background: {surf2};
-            border-top: 1px solid #DC2626;
-            min-height: 34px;
+            background: {bg};
+            border-top: 1px solid rgba(100, 116, 139, 0.25);
+            min-height: 44px;
         }}
         QLabel#footerSecondary {{
             color: {ts};
-            font-size: 11px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            background: transparent;
+            padding: 4px 0px;
         }}
         QLabel#footerStatusLabel {{
             color: {ts};
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 500;
-            padding: 4px 12px;
-            border-radius: 6px;
+            padding: 5px 14px;
+            border-radius: 8px;
+            border: 1px solid {b};
             background: {surf};
         }}
-        QLabel#footerStatusLabel[state="running"] {{ color: #15803D; background: #DCFCE7; }}
-        QLabel#footerStatusLabel[state="paused"] {{ color: #B45309; background: #FEF3C7; }}
-        QLabel#footerStatusLabel[state="macro"] {{ color: {ac}; background: {sel_bg}; }}
+        QLabel#footerStatusLabel[state="idle"] {{
+            color: {td};
+            background: {surf2};
+        }}
+        QLabel#footerStatusLabel[state="running"] {{
+            color: #15803D;
+            border: 1px solid #86EFAC;
+            background: #DCFCE7;
+        }}
+        QLabel#footerStatusLabel[state="paused"] {{
+            color: #B45309;
+            border: 1px solid #FCD34D;
+            background: #FEF3C7;
+        }}
+        QLabel#footerStatusLabel[state="macro"] {{
+            color: {ac};
+            border: 1px solid #C7D2FE;
+            background: {sel_bg};
+        }}
         QWidget#brandingPanel {{
-            background: #F8FAFC;
+            background: {bg};
         }}
         QFrame#sidebarVerticalDivider {{
             border: none;
-            background: #DC2626;
+            background: rgba(99, 102, 241, 0.35);
             max-width: 2px;
             min-width: 2px;
         }}
@@ -707,7 +768,7 @@ def stylesheet_for(theme: ThemeMode) -> str:
         }}
         QFrame#brandDivider {{
             border: none;
-            background: #DC2626;
+            background: rgba(99, 102, 241, 0.35);
             max-height: 2px;
         }}
         QLabel#brandTitle {{
@@ -761,6 +822,24 @@ def stylesheet_for(theme: ThemeMode) -> str:
         }}
         QLabel#brandLink {{
             font-size: 12px;
+        }}
+        QWidget#brandSocialRow {{
+            background: transparent;
+        }}
+        QToolButton#brandSocialButton {{
+            background: {surf};
+            border: 1px solid {b};
+            border-radius: 22px;
+            min-width: 44px;
+            min-height: 44px;
+            padding: 0px;
+        }}
+        QToolButton#brandSocialButton:hover {{
+            background: #F1F5F9;
+            border: 1px solid #CBD5E1;
+        }}
+        QToolButton#brandSocialButton:pressed {{
+            background: #E2E8F0;
         }}
         QLabel#brandVersion {{
             color: {td};

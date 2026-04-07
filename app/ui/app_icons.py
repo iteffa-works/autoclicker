@@ -76,12 +76,17 @@ _ICON_MAP: dict[str, str] = {
     "diag_mouse": "fa5s.mouse",
     "diag_coords": "fa5s.crosshairs",
     "diag_scroll": "fa5s.arrows-alt-v",
+    # Сайдбар: соцмережі та контакт
+    "brand_telegram": "fa5b.telegram",
+    "brand_whatsapp": "fa5b.whatsapp",
+    "brand_email": "fa5s.envelope",
 }
 
 # Pixel sizes (width = height)
 ICON_SIZE_NAV = 16
 ICON_SIZE_TOOLBAR = 18
 ICON_SIZE_SECTION = 18
+ICON_SIZE_BRAND_SOCIAL = 20
 # QCheckBox::indicator:checked — QSS приймає лише url(); збираємо pixmap з Font Awesome (qtawesome).
 CHECKBOX_INDICATOR_PX = 18
 
@@ -89,6 +94,7 @@ _KIND_TO_SIZE = {
     "nav": ICON_SIZE_NAV,
     "toolbar": ICON_SIZE_TOOLBAR,
     "section": ICON_SIZE_SECTION,
+    "brand_social": ICON_SIZE_BRAND_SOCIAL,
 }
 
 
@@ -102,6 +108,12 @@ def _icon_color(theme: ThemeMode) -> str:
 
 def app_icon(key: str, theme: ThemeMode) -> QIcon:
     fa = _ICON_MAP.get(key, "fa5s.circle")
+    if key == "brand_telegram":
+        return qta.icon(fa, color="#2AABEE")
+    if key == "brand_whatsapp":
+        return qta.icon(fa, color="#25D366")
+    if key == "brand_email":
+        return qta.icon(fa, color="#EF4444")
     return qta.icon(fa, color=_icon_color(theme))
 
 

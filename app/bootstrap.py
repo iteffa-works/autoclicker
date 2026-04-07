@@ -8,7 +8,7 @@ import sys
 from PySide6.QtWidgets import QApplication, QStyleFactory
 from PySide6.QtWidgets import QSystemTrayIcon
 
-from app.branding import APP_NAME, WINDOW_TITLE
+from app.branding import APP_NAME
 from app.single_instance import SingleInstanceGuard
 from app.ui.main_window import MainWindow
 from app.utils.app_icon import load_app_icon
@@ -17,7 +17,7 @@ from app.utils.app_icon import load_app_icon
 def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
-    app.setApplicationDisplayName(WINDOW_TITLE)
+    app.setApplicationDisplayName("Flowaxy")
     app.setQuitOnLastWindowClosed(False)
     app.setStyle(QStyleFactory.create("Fusion"))
 

@@ -35,8 +35,8 @@ def _load(lang: str) -> dict[str, Any]:
         return json.load(f)
 
 
-def tr_kb(lang: str, key: str) -> str:
-    """Nested key path, e.g. kb_test.history. Falls back to uk, then to key."""
+def tr(lang: str, key: str) -> str:
+    """Nested key path (e.g. app.product_subtitle, kb_test.history). Falls back to uk, then to key."""
     parts = key.split(".")
     for lg in (normalize_ui_language(lang), "uk"):
         data = _load(lg)
@@ -51,3 +51,8 @@ def tr_kb(lang: str, key: str) -> str:
         if ok and isinstance(cur, str):
             return cur
     return key
+
+
+def tr_kb(lang: str, key: str) -> str:
+    """Alias for keyboard-test strings (same as tr)."""
+    return tr(lang, key)

@@ -1,4 +1,22 @@
 {
+  "app": {
+    "product_subtitle": "Autoclicker & macros",
+    "blurb": "Interval or CPS, jitter, saved cursor position, step sequences, macro recording and playback, hotkeys, and tray support.",
+    "about_features_title": "Features",
+    "about_features": "• Left, right, middle button — single or double click\n• Interval (ms), CPS, random jitter and timing variance\n• Macros, hotkeys, pause and emergency stop\n• Keyboard test and event log",
+    "disclaimer": "Follow the rules of games and services. No tool bypasses protections — use responsibly.",
+    "footer_rights": "All rights reserved",
+    "social_telegram": "Telegram",
+    "social_whatsapp": "WhatsApp",
+    "social_email": "Email"
+  },
+  "nav": {
+    "autoclick": "Autoclicker",
+    "macros": "Macros",
+    "keyboard_test": "Keyboard test",
+    "settings": "Settings",
+    "logs": "Logs"
+  },
   "kb_test": {
     "history": "Keystroke history",
     "history_tooltip": "Show recent key presses",

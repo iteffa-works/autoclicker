@@ -6,10 +6,11 @@ import copy
 import ctypes
 import logging
 import sys
+from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QEvent, QSize, QTimer, Qt, Signal
-from PySide6.QtGui import QCloseEvent, QIcon, QPixmap, QShowEvent
+from PySide6.QtCore import QByteArray, QEvent, QSize, QTimer, Qt, QUrl, Signal
+from PySide6.QtGui import QCloseEvent, QDesktopServices, QIcon, QPixmap, QShowEvent
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -36,24 +37,20 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QTextEdit,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from app.branding import (
     APP_VERSION,
-    BRAND_FEATURE_LINES_UK,
-    BRAND_FEATURES_SECTION_UK,
-    BRAND_HINT_UK,
-    PRODUCT_BLURB_UK,
-    PRODUCT_TITLE_UK,
-    STUDIO_AUTHOR,
+    BRAND_TELEGRAM_URL,
+    BRAND_WHATSAPP_URL,
     STUDIO_EMAIL,
-    STUDIO_TAGLINE_UK,
     STUDIO_URL,
-    WINDOW_TITLE,
+    format_window_title,
 )
-from app.i18n import normalize_ui_language
+from app.i18n import normalize_ui_language, tr
 from app.core.autoclicker import AutoclickConfig, ClickMode, MouseButtonChoice
 from app.core.bind_validator import validate_bindings
 from app.core.clicker_facade import UnifiedClickerEngine
@@ -104,12 +101,12 @@ from app.services.win_hotkey_service import WM_HOTKEY
 # QSS не задає gap між іконкою та підписом у QPushButton — тонкий пробіл (було 3× en — забагато).
 _ICON_TEXT_GAP = "\u2009"
 
-_NAV_TITLES = (
-    "Автоклікер",
-    "Макроси",
-    "Тест клавіатури",
-    "Налаштування",
-    "Логи",
+_NAV_KEYS = (
+    "nav.autoclick",
+    "nav.macros",
+    "nav.keyboard_test",
+    "nav.settings",
+    "nav.logs",
 )
 _NAV_INDEX_KEYBOARD_TEST = 2
 
@@ -121,12 +118,12 @@ class MainWindow(QMainWindow):
 
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle(WINDOW_TITLE)
         self.setFixedSize(WINDOW_WIDTH, WINDOW_HEIGHT)
         self._apply_no_maximize_button()
         self._settings = load_settings()
         self._event_bus = EventBus()
         self._icon_targets: list[tuple[QWidget, str, str]] = []
+        self._brand_social_tooltips: list[tuple[QToolButton, str]] = []
         self._clicker = UnifiedClickerEngine(self._event_bus)
         self._macro_engine = MacroEngine(self._event_bus)
         self._hotkey_manager = HotkeyManager()
@@ -168,10 +165,12 @@ class MainWindow(QMainWindow):
         self.setWindowFlag(Qt.WindowType.WindowMaximizeButtonHint, False)
 
     def setup_tray(self, icon: QIcon) -> None:
+        _L = normalize_ui_language(self._settings.ui_language)
+        _tip = format_window_title(tr(_L, "app.product_subtitle"))
         self._tray.setup(
             on_show=self.bring_to_front,
             on_quit=self._quit_forced,
-            tooltip=WINDOW_TITLE,
+            tooltip=_tip,
             icon=icon,
         )
         if self._settings.minimize_to_tray:
@@ -230,6 +229,9 @@ class MainWindow(QMainWindow):
             sz = icon_kind_size(kind)
             qsz = QSize(sz, sz)
             if isinstance(w, QPushButton):
+                w.setIcon(ic)
+                w.setIconSize(qsz)
+            elif isinstance(w, QToolButton):
                 w.setIcon(ic)
                 w.setIconSize(qsz)
             elif isinstance(w, QLabel):
@@ -336,8 +338,9 @@ class MainWindow(QMainWindow):
         nav_lay.setSpacing(4)
         self._nav_group = QButtonGroup(self)
         self._nav_group.setExclusive(True)
-        for i, title in enumerate(_NAV_TITLES):
-            nb = QPushButton(_ICON_TEXT_GAP + title)
+        _L = normalize_ui_language(self._settings.ui_language)
+        for i, nk in enumerate(_NAV_KEYS):
+            nb = QPushButton(_ICON_TEXT_GAP + tr(_L, nk))
             nb.setObjectName("headerNavButton")
             nb.setCheckable(True)
             self._nav_group.addButton(nb, i)
@@ -385,72 +388,68 @@ class MainWindow(QMainWindow):
         _bl = QVBoxLayout(_brand)
         _bl.setContentsMargins(10, 8, 10, 10)
         _bl.setSpacing(6)
-        _title = QLabel("Flowaxy")
-        _title.setObjectName("brandTitle")
-        _title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _product = QLabel(PRODUCT_TITLE_UK)
-        _product.setObjectName("brandProductSubtitle")
-        _product.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _product.setWordWrap(True)
-        _blurb = QLabel(PRODUCT_BLURB_UK)
-        _blurb.setObjectName("brandBlurb")
-        _blurb.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _blurb.setWordWrap(True)
-        _tag = QLabel(STUDIO_TAGLINE_UK)
-        _tag.setObjectName("brandTagline")
-        _tag.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _tag.setWordWrap(True)
-        _author = QLabel(STUDIO_AUTHOR)
-        _author.setObjectName("brandAuthor")
-        _author.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._lbl_brand_product = QLabel(tr(_L, "app.product_subtitle"))
+        self._lbl_brand_product.setObjectName("brandTitle")
+        self._lbl_brand_product.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._lbl_brand_product.setWordWrap(True)
+        self._lbl_brand_blurb = QLabel(tr(_L, "app.blurb"))
+        self._lbl_brand_blurb.setObjectName("brandBlurb")
+        self._lbl_brand_blurb.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._lbl_brand_blurb.setWordWrap(True)
         _info = QFrame()
         _info.setObjectName("brandInfoCard")
         _il = QVBoxLayout(_info)
         _il.setContentsMargins(10, 10, 10, 10)
         _il.setSpacing(8)
-        _sec_feat = QLabel(BRAND_FEATURES_SECTION_UK)
-        _sec_feat.setObjectName("brandSectionTitle")
-        _feat = QLabel("\n".join(f"• {line}" for line in BRAND_FEATURE_LINES_UK))
-        _feat.setObjectName("brandFeaturesList")
-        _feat.setWordWrap(True)
-        _hint = QLabel(BRAND_HINT_UK)
-        _hint.setObjectName("brandHint")
-        _hint.setWordWrap(True)
-        _il.addWidget(_sec_feat)
-        _il.addWidget(_feat)
-        _il.addWidget(_hint)
+        self._lbl_brand_sec_feat = QLabel(tr(_L, "app.about_features_title"))
+        self._lbl_brand_sec_feat.setObjectName("brandSectionTitle")
+        self._lbl_brand_feat = QLabel(tr(_L, "app.about_features"))
+        self._lbl_brand_feat.setObjectName("brandFeaturesList")
+        self._lbl_brand_feat.setWordWrap(True)
+        self._lbl_brand_hint = QLabel(tr(_L, "app.disclaimer"))
+        self._lbl_brand_hint.setObjectName("brandHint")
+        self._lbl_brand_hint.setWordWrap(True)
+        _il.addWidget(self._lbl_brand_sec_feat)
+        _il.addWidget(self._lbl_brand_feat)
+        _il.addWidget(self._lbl_brand_hint)
         _div_bottom = QFrame()
         _div_bottom.setObjectName("brandDivider")
         _div_bottom.setFrameShape(QFrame.Shape.HLine)
         _div_bottom.setFixedHeight(2)
-        _site = QLabel(
-            f'<a href="{STUDIO_URL}" style="color:#EF4444;text-decoration:none;">flowaxy.com</a>'
-        )
-        _site.setObjectName("brandLink")
-        _site.setOpenExternalLinks(True)
-        _site.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _mail = QLabel(
-            f'<a href="mailto:{STUDIO_EMAIL}" style="color:#EF4444;">contact@flowaxy.com</a>'
-        )
-        _mail.setObjectName("brandLink")
-        _mail.setOpenExternalLinks(True)
-        _mail.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _ver = QLabel(f"v{APP_VERSION}")
-        _ver.setObjectName("brandVersion")
-        _ver.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _social_row = QWidget()
+        _social_row.setObjectName("brandSocialRow")
+        _sl = QHBoxLayout(_social_row)
+        _sl.setContentsMargins(0, 10, 0, 10)
+        _sl.setSpacing(12)
+        _sl.addStretch(1)
+        _sz_social = icon_kind_size("brand_social")
+        _qsz_social = QSize(_sz_social, _sz_social)
+        for key, url, tip_key in (
+            ("brand_telegram", BRAND_TELEGRAM_URL, "app.social_telegram"),
+            ("brand_whatsapp", BRAND_WHATSAPP_URL, "app.social_whatsapp"),
+            ("brand_email", f"mailto:{STUDIO_EMAIL}", "app.social_email"),
+        ):
+            tb = QToolButton()
+            tb.setObjectName("brandSocialButton")
+            tb.setAutoRaise(True)
+            tb.setIcon(app_icon(key, self._settings.theme))
+            tb.setIconSize(_qsz_social)
+            tb.setCursor(Qt.CursorShape.PointingHandCursor)
+            tb.setToolTip(tr(_L, tip_key))
+            tb.clicked.connect(lambda _=False, u=url: QDesktopServices.openUrl(QUrl(u)))
+            self._register_icon_widget(tb, key, "brand_social")
+            self._brand_social_tooltips.append((tb, tip_key))
+            _sl.addWidget(tb)
+        _sl.addStretch(1)
         for w in (
-            _title,
-            _product,
-            _blurb,
-            _tag,
-            _author,
+            self._lbl_brand_product,
+            self._lbl_brand_blurb,
             _info,
         ):
             _bl.addWidget(w)
         _bl.addStretch(1)
         _bl.addWidget(_div_bottom)
-        for w in (_site, _mail, _ver):
-            _bl.addWidget(w)
+        _bl.addWidget(_social_row)
         side_col.addWidget(_brand, 1)
 
         scroll_inner = QWidget()
@@ -491,10 +490,13 @@ class MainWindow(QMainWindow):
         footer = QWidget()
         footer.setObjectName("appFooter")
         foot_lay = QHBoxLayout(footer)
-        foot_lay.setContentsMargins(S16, 6, S16, 6)
+        foot_lay.setContentsMargins(S16, 10, S16, 10)
         foot_lay.setSpacing(S16)
-        self._footer_info = QLabel(f"{STUDIO_AUTHOR} · v{APP_VERSION}")
+        self._footer_info = QLabel()
         self._footer_info.setObjectName("footerSecondary")
+        self._footer_info.setTextFormat(Qt.TextFormat.RichText)
+        self._footer_info.setOpenExternalLinks(True)
+        self._footer_info.setText(self._footer_copyright_html(_L))
         self._footer_status = QLabel("Стан: зупинено")
         self._footer_status.setObjectName("footerStatusLabel")
         self._footer_status.setProperty("state", "idle")
@@ -1888,10 +1890,50 @@ class MainWindow(QMainWindow):
     def _append_log_slot(self, msg: str) -> None:
         self._log_edit.append(msg)
 
+    def _footer_copyright_html(self, lang: str) -> str:
+        from app.models.settings import ThemeMode
+
+        L = normalize_ui_language(lang)
+        rights = tr(L, "app.footer_rights")
+        year = datetime.now().year
+        if self._settings.theme == ThemeMode.LIGHT:
+            muted, link_c = "#64748B", "#DC2626"
+        else:
+            muted, link_c = "#94A3B8", "#FB7185"
+        return (
+            f'<span style="color:{muted};font-weight:600;font-size:12px;letter-spacing:0.02em;">© {year} </span>'
+            f'<a href="{STUDIO_URL}" style="color:{link_c};font-weight:600;text-decoration:none;">FLOWAXY SOFTWARE</a>'
+            f'<span style="color:{muted};font-weight:600;font-size:12px;letter-spacing:0.02em;"> · {rights} · v{APP_VERSION}</span>'
+        )
+
+    def _retranslate_ui(self) -> None:
+        L = normalize_ui_language(self._settings.ui_language)
+        wt = format_window_title(tr(L, "app.product_subtitle"))
+        self.setWindowTitle(wt)
+        app_inst = QApplication.instance()
+        if app_inst is not None:
+            app_inst.setApplicationDisplayName(wt)
+        self._overlay.setWindowTitle(wt)
+        if getattr(self._tray, "_tray", None):
+            self._tray.set_tooltip(wt)
+        self._lbl_brand_product.setText(tr(L, "app.product_subtitle"))
+        self._lbl_brand_blurb.setText(tr(L, "app.blurb"))
+        self._lbl_brand_sec_feat.setText(tr(L, "app.about_features_title"))
+        self._lbl_brand_feat.setText(tr(L, "app.about_features"))
+        self._lbl_brand_hint.setText(tr(L, "app.disclaimer"))
+        for btn, tip_key in self._brand_social_tooltips:
+            btn.setToolTip(tr(L, tip_key))
+        self._footer_info.setText(self._footer_copyright_html(L))
+        for i, nk in enumerate(_NAV_KEYS):
+            b = self._nav_group.button(i)
+            if b:
+                b.setText(_ICON_TEXT_GAP + tr(L, nk))
+
     def _apply_theme(self) -> None:
         self.setStyleSheet(stylesheet_for(self._settings.theme))
         sync_themed_checkboxes(self, self._settings.theme)
         self._refresh_ui_icons()
+        self._retranslate_ui()
         if hasattr(self, "_kb_panel"):
             self._kb_panel.set_theme(self._settings.theme)
             self._kb_panel.set_ui_language(self._settings.ui_language)

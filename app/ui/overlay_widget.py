@@ -6,9 +6,6 @@ from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
 
-from app.branding import WINDOW_TITLE
-
-
 class ActivityOverlay(QWidget):
     """Shows status and bind hints; emergency stop."""
 
@@ -19,7 +16,7 @@ class ActivityOverlay(QWidget):
             | Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint,
         )
-        self.setWindowTitle(WINDOW_TITLE)
+        self.setWindowTitle("Flowaxy")
         lay = QVBoxLayout(self)
         self._title = QLabel()
         self._title.setWordWrap(True)

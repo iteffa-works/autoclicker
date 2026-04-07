@@ -52,3 +52,7 @@ class TrayService:
     def hide(self) -> None:
         if self._tray:
             self._tray.hide()
+
+    def set_tooltip(self, text: str) -> None:
+        if self._tray:
+            self._tray.setToolTip(text)
