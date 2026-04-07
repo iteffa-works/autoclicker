@@ -32,7 +32,7 @@ class HotkeyBackend(str, Enum):
 @dataclass
 class AppSettings:
     theme: ThemeMode = ThemeMode.DARK
-    ui_language: str = "uk"  # stub for future localization
+    ui_language: str = "uk"  # en | uk | ru (see app/i18n)
     always_on_top: bool = False
     sound_on_start_stop: bool = False
     minimize_to_tray: bool = True

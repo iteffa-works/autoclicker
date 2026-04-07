@@ -19,10 +19,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.i18n import normalize_ui_language, tr_kb
 from app.models.settings import ThemeMode
 from app.ui import design_tokens as DT
 from app.ui.app_icons import app_icon
-from app.ui.keyboard_vk_map import KEY_ID_TO_VK_LAYOUT_ONLY
+from app.ui.keyboard_vk_map import KEY_ID_TO_VK, KEY_ID_TO_VK_LAYOUT_ONLY
 from app.ui.themed_checkbox import ThemedCheckBox as QCheckBox
 from app.ui.theme import (
     KeyboardKeycapStyles,
@@ -31,6 +32,21 @@ from app.ui.theme import (
     mouse_test_panel_styles,
     mouse_test_pill_style,
 )
+
+
+def _hist_chip_text_for_key_id(key_id: str) -> str:
+    """Символ активної розкладки Windows для цієї клавіші (як на візуальній клавіатурі), інакше key_id."""
+    if sys.platform != "win32":
+        return key_id
+    from app.ui.keyboard_layout_win import current_hkl, vk_to_display_char
+
+    vk = KEY_ID_TO_VK.get(key_id)
+    if vk is None:
+        return key_id
+    ch = vk_to_display_char(vk, current_hkl())
+    if ch:
+        return "␣" if ch == " " else ch
+    return key_id
 
 
 def _key_outer_size(colspan: int, rowspan: int) -> tuple[int, int]:
@@ -168,10 +184,11 @@ class KeyboardTestPanel(QWidget):
     NUM_COLS = 4
     _HIST_MAX = 32
 
-    def __init__(self, theme: ThemeMode) -> None:
+    def __init__(self, theme: ThemeMode, ui_language: str = "uk") -> None:
         super().__init__()
         self.setObjectName("keyboardTestRoot")
         self._theme = theme
+        self._ui_lang = normalize_ui_language(ui_language)
         self._styles = keyboard_keycap_styles(theme)
         self._caps: dict[str, list[KeyCapWidget]] = defaultdict(list)
         self._fn_caps: list[KeyCapWidget] = []
@@ -180,6 +197,7 @@ class KeyboardTestPanel(QWidget):
         self._layout_timer.setInterval(280)
         self._layout_timer.timeout.connect(self._on_layout_tick)
 
+        # Рядки для чіпів: символ розкладки (Windows) або key_id для службових клавіш
         self._hist_deque: deque[str] = deque(maxlen=self._HIST_MAX)
 
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
@@ -191,8 +209,10 @@ class KeyboardTestPanel(QWidget):
         hist_row = QHBoxLayout()
         hist_row.setContentsMargins(DT.S12, 0, DT.S12, 0)
         hist_row.setSpacing(DT.S8)
-        self._hist_check = QCheckBox("Історія натискань", theme=self._theme)
-        self._hist_check.setToolTip("Показувати останні натискання клавіш")
+        self._hist_check = QCheckBox(
+            tr_kb(self._ui_lang, "kb_test.history"), theme=self._theme
+        )
+        self._hist_check.setToolTip(tr_kb(self._ui_lang, "kb_test.history_tooltip"))
         hist_row.addWidget(self._hist_check)
         self._hist_chips_host = QWidget()
         self._hist_chips_host.setSizePolicy(
@@ -510,6 +530,12 @@ class KeyboardTestPanel(QWidget):
         else:
             self._layout_timer.stop()
 
+    def set_ui_language(self, ui_language: str) -> None:
+        self._ui_lang = normalize_ui_language(ui_language)
+        self._hist_check.setText(tr_kb(self._ui_lang, "kb_test.history"))
+        self._hist_check.setToolTip(tr_kb(self._ui_lang, "kb_test.history_tooltip"))
+        self._hist_check.updateGeometry()
+
     def set_theme(self, theme: ThemeMode) -> None:
         self._theme = theme
         self._hist_check.set_theme(theme)
@@ -554,7 +580,7 @@ class KeyboardTestPanel(QWidget):
     def record_key_press(self, key_id: str) -> None:
         if not self._hist_check.isChecked():
             return
-        self._hist_deque.append(key_id)
+        self._hist_deque.append(_hist_chip_text_for_key_id(key_id))
         self._refresh_hist_chips()
 
     def _refresh_hist_chips(self) -> None:
@@ -562,8 +588,8 @@ class KeyboardTestPanel(QWidget):
             item = self._hist_chips_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-        for kid in self._hist_deque:
-            lab = QLabel(kid)
+        for chip_text in self._hist_deque:
+            lab = QLabel(chip_text)
             lab.setObjectName("kbHistChip")
             lab.setSizePolicy(
                 QSizePolicy.Policy.Preferred,
@@ -575,9 +601,12 @@ class KeyboardTestPanel(QWidget):
 class MouseTestPanel(QWidget):
     _ICON_HEADER_PX = 18
 
-    def __init__(self, theme: ThemeMode) -> None:
+    def __init__(self, theme: ThemeMode, ui_language: str = "uk") -> None:
         super().__init__()
         self._theme = theme
+        self._ui_lang = normalize_ui_language(ui_language)
+        self._diag_titles: dict[str, QLabel] = {}
+        self._mouse_key_labels: list[QLabel] = []
         self._down = {
             "left": False,
             "right": False,
@@ -596,11 +625,12 @@ class MouseTestPanel(QWidget):
         row = QHBoxLayout()
         row.setSpacing(DT.S12)
         row.setContentsMargins(0, 0, 0, 0)
-        self._pill_l = QLabel("відпущено")
-        self._pill_r = QLabel("відпущено")
-        self._pill_m = QLabel("відпущено")
-        self._pill_back = QLabel("відпущено")
-        self._pill_fwd = QLabel("відпущено")
+        _rel = tr_kb(self._ui_lang, "kb_test.released")
+        self._pill_l = QLabel(_rel)
+        self._pill_r = QLabel(_rel)
+        self._pill_m = QLabel(_rel)
+        self._pill_back = QLabel(_rel)
+        self._pill_fwd = QLabel(_rel)
         for p in (
             self._pill_l,
             self._pill_r,
@@ -625,7 +655,20 @@ class MouseTestPanel(QWidget):
 
         self.set_theme(theme)
 
-    def _diag_header(self, title: str, icon_key: str) -> QWidget:
+    def set_ui_language(self, ui_language: str) -> None:
+        self._ui_lang = normalize_ui_language(ui_language)
+        L = self._ui_lang
+        self._diag_titles["mouse"].setText(tr_kb(L, "kb_test.mouse"))
+        self._diag_titles["coords"].setText(tr_kb(L, "kb_test.coords"))
+        self._diag_titles["scroll"].setText(tr_kb(L, "kb_test.scroll"))
+        for lbl, key_id in zip(
+            self._mouse_key_labels,
+            ("lmb", "rmb", "mmb", "back", "forward"),
+        ):
+            lbl.setText(tr_kb(L, f"kb_test.{key_id}"))
+        self._apply_pills()
+
+    def _diag_header(self, section_id: str, title: str, icon_key: str) -> QWidget:
         w = QWidget()
         w.setObjectName("kbDiagHeader")
         h = QHBoxLayout(w)
@@ -639,6 +682,7 @@ class MouseTestPanel(QWidget):
         tit = QLabel(title)
         tit.setObjectName("kbDiagTitle")
         tit.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
+        self._diag_titles[section_id] = tit
         h.addWidget(ic, 0, Qt.AlignmentFlag.AlignVCenter)
         h.addWidget(tit, 0, Qt.AlignmentFlag.AlignVCenter)
         h.addStretch(1)
@@ -651,7 +695,13 @@ class MouseTestPanel(QWidget):
         v = QVBoxLayout(card)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
-        v.addWidget(self._diag_header("Миша", "diag_mouse"))
+        v.addWidget(
+            self._diag_header(
+                "mouse",
+                tr_kb(self._ui_lang, "kb_test.mouse"),
+                "diag_mouse",
+            )
+        )
         body = QWidget()
         body.setObjectName("kbDiagBody")
         vb = QVBoxLayout(body)
@@ -659,21 +709,22 @@ class MouseTestPanel(QWidget):
         vb.setSpacing(0)
         hrow = QHBoxLayout()
         hrow.setSpacing(DT.S8)
-        for name, pill in (
-            ("ЛКМ", self._pill_l),
-            ("ПКМ", self._pill_r),
-            ("СКМ", self._pill_m),
-            ("Назад", self._pill_back),
-            ("Вперед", self._pill_fwd),
+        for key_id, pill in (
+            ("lmb", self._pill_l),
+            ("rmb", self._pill_r),
+            ("mmb", self._pill_m),
+            ("back", self._pill_back),
+            ("forward", self._pill_fwd),
         ):
             cell = QFrame()
             cell.setObjectName("mouseDiagCell")
             cv = QVBoxLayout(cell)
             cv.setContentsMargins(10, 10, 10, 10)
             cv.setSpacing(DT.S8)
-            lb = QLabel(name)
+            lb = QLabel(tr_kb(self._ui_lang, f"kb_test.{key_id}"))
             lb.setObjectName("mouseDiagKeyLbl")
             lb.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._mouse_key_labels.append(lb)
             cv.addWidget(lb, 0, Qt.AlignmentFlag.AlignHCenter)
             cv.addWidget(pill, 0, Qt.AlignmentFlag.AlignHCenter)
             hrow.addWidget(cell, 1)
@@ -701,7 +752,13 @@ class MouseTestPanel(QWidget):
         v = QVBoxLayout(card)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
-        v.addWidget(self._diag_header("Координати", "diag_coords"))
+        v.addWidget(
+            self._diag_header(
+                "coords",
+                tr_kb(self._ui_lang, "kb_test.coords"),
+                "diag_coords",
+            )
+        )
         body = QWidget()
         body.setObjectName("kbDiagBody")
         vb = QVBoxLayout(body)
@@ -721,7 +778,13 @@ class MouseTestPanel(QWidget):
         v = QVBoxLayout(card)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
-        v.addWidget(self._diag_header("Скрол", "diag_scroll"))
+        v.addWidget(
+            self._diag_header(
+                "scroll",
+                tr_kb(self._ui_lang, "kb_test.scroll"),
+                "diag_scroll",
+            )
+        )
         body = QWidget()
         body.setObjectName("kbDiagBody")
         vb = QVBoxLayout(body)
@@ -750,11 +813,13 @@ class MouseTestPanel(QWidget):
         self._pill_m.setStyleSheet(mouse_test_pill_style(t, self._down["middle"]))
         self._pill_back.setStyleSheet(mouse_test_pill_style(t, self._down["back"]))
         self._pill_fwd.setStyleSheet(mouse_test_pill_style(t, self._down["forward"]))
-        self._pill_l.setText("натиснуто" if self._down["left"] else "відпущено")
-        self._pill_r.setText("натиснуто" if self._down["right"] else "відпущено")
-        self._pill_m.setText("натиснуто" if self._down["middle"] else "відпущено")
-        self._pill_back.setText("натиснуто" if self._down["back"] else "відпущено")
-        self._pill_fwd.setText("натиснуто" if self._down["forward"] else "відпущено")
+        down_t = tr_kb(self._ui_lang, "kb_test.pressed")
+        up_t = tr_kb(self._ui_lang, "kb_test.released")
+        self._pill_l.setText(down_t if self._down["left"] else up_t)
+        self._pill_r.setText(down_t if self._down["right"] else up_t)
+        self._pill_m.setText(down_t if self._down["middle"] else up_t)
+        self._pill_back.setText(down_t if self._down["back"] else up_t)
+        self._pill_fwd.setText(down_t if self._down["forward"] else up_t)
 
     def set_pos(self, x: int, y: int) -> None:
         self._lbl_x.setText(str(x))

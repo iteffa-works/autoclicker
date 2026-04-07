@@ -1,0 +1,16 @@
+{
+  "kb_test": {
+    "history": "Keystroke history",
+    "history_tooltip": "Show recent key presses",
+    "mouse": "Mouse",
+    "coords": "Coordinates",
+    "scroll": "Scroll",
+    "lmb": "LMB",
+    "rmb": "RMB",
+    "mmb": "MMB",
+    "back": "Back",
+    "forward": "Forward",
+    "pressed": "Pressed",
+    "released": "Released"
+  }
+}

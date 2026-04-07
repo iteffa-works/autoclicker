@@ -53,6 +53,7 @@ from app.branding import (
     STUDIO_URL,
     WINDOW_TITLE,
 )
+from app.i18n import normalize_ui_language
 from app.core.autoclicker import AutoclickConfig, ClickMode, MouseButtonChoice
 from app.core.bind_validator import validate_bindings
 from app.core.clicker_facade import UnifiedClickerEngine
@@ -1627,7 +1628,20 @@ class MainWindow(QMainWindow):
         self._set_theme = QComboBox()
         self._set_theme.addItems(["Темна", "Світла"])
         self._set_theme.setCurrentIndex(0 if self._settings.theme == ThemeMode.DARK else 1)
-        self._set_lang = QLineEdit(self._settings.ui_language)
+        self._set_lang = QComboBox()
+        for label, code in (
+            ("English", "en"),
+            ("Українська", "uk"),
+            ("Русский", "ru"),
+        ):
+            self._set_lang.addItem(label, code)
+        _lang_cur = normalize_ui_language(self._settings.ui_language)
+        for _i in range(self._set_lang.count()):
+            if self._set_lang.itemData(_i) == _lang_cur:
+                self._set_lang.setCurrentIndex(_i)
+                break
+        else:
+            self._set_lang.setCurrentIndex(1)
         self._set_top = QCheckBox("Поверх усіх вікон")
         self._set_top.setChecked(self._settings.always_on_top)
         self._set_sound = QCheckBox("Звук старт/стоп")
@@ -1672,7 +1686,7 @@ class MainWindow(QMainWindow):
         grid.addWidget(self._set_theme, r, 1)
         r += 1
         grid.addWidget(
-            self._settings_lbl("Мова (заглушка)"),
+            self._settings_lbl("Мова інтерфейсу"),
             r,
             0,
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
@@ -1769,6 +1783,7 @@ class MainWindow(QMainWindow):
         self._field_max_width(self._set_overlay_op, FORM_FIELD_MAX_W)
         self._field_max_width(self._set_autosave_sec, 120)
         self._field_max_width(self._set_log_level, FORM_COMBO_MAX_W)
+        self._field_max_width(self._set_lang, FORM_COMBO_MAX_W)
         self._field_max_width(self._set_jitter, FORM_FIELD_MAX_W)
 
         vl.addWidget(settings_block)
@@ -1787,7 +1802,10 @@ class MainWindow(QMainWindow):
 
     def _save_settings_ui(self) -> None:
         self._settings.theme = ThemeMode.DARK if self._set_theme.currentIndex() == 0 else ThemeMode.LIGHT
-        self._settings.ui_language = self._set_lang.text().strip() or "uk"
+        _ld = self._set_lang.currentData()
+        self._settings.ui_language = (
+            str(_ld) if _ld is not None else normalize_ui_language(self._set_lang.currentText())
+        )
         self._settings.always_on_top = self._set_top.isChecked()
         self._settings.sound_on_start_stop = self._set_sound.isChecked()
         self._settings.minimize_to_tray = self._set_tray.isChecked()
@@ -1807,10 +1825,6 @@ class MainWindow(QMainWindow):
         save_settings(self._settings)
         self._presenter.notify_settings_saved()
         self._apply_theme()
-        if hasattr(self, "_kb_panel"):
-            self._kb_panel.set_theme(self._settings.theme)
-        if hasattr(self, "_mouse_panel"):
-            self._mouse_panel.set_theme(self._settings.theme)
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, self._settings.always_on_top)
         self._apply_no_maximize_button()
         self.show()
@@ -1832,8 +1846,8 @@ class MainWindow(QMainWindow):
         lay = QVBoxLayout(w)
         lay.setSpacing(10)
         lay.setContentsMargins(0, 0, 0, 0)
-        self._kb_panel = KeyboardTestPanel(self._settings.theme)
-        self._mouse_panel = MouseTestPanel(self._settings.theme)
+        self._kb_panel = KeyboardTestPanel(self._settings.theme, self._settings.ui_language)
+        self._mouse_panel = MouseTestPanel(self._settings.theme, self._settings.ui_language)
         lay.addWidget(self._kb_panel, 0)
         lay.addWidget(self._mouse_panel, 0)
         lay.addStretch(1)
@@ -1880,8 +1894,10 @@ class MainWindow(QMainWindow):
         self._refresh_ui_icons()
         if hasattr(self, "_kb_panel"):
             self._kb_panel.set_theme(self._settings.theme)
+            self._kb_panel.set_ui_language(self._settings.ui_language)
         if hasattr(self, "_mouse_panel"):
             self._mouse_panel.set_theme(self._settings.theme)
+            self._mouse_panel.set_ui_language(self._settings.ui_language)
 
     def _is_busy(self) -> bool:
         if self._macro_engine.get_state() == AppRunState.PLAYING_MACRO:

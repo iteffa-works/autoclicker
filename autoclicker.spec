@@ -24,6 +24,7 @@ a = Analysis(
         (str(root / "assets" / "icons"), "assets/icons"),
         (str(root / "assets" / "images"), "assets/images"),
     ]
+    + [(str(p), "app/i18n") for p in (root / "app" / "i18n").glob("*.json")]
     + collect_data_files("qtawesome"),
     hiddenimports=["pynput.keyboard._win32", "pynput.mouse._win32", "qtawesome"],
     hookspath=[],
