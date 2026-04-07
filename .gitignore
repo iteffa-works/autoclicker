@@ -34,7 +34,6 @@ warn-*.txt
 
 # Локальні налаштування та дані застосунку (не комітити)
 config/settings.json
-data/macros/autosave_last.json
 
 # Секрети та локальний env
 .env
@@ -56,4 +55,5 @@ Desktop.ini
 # Логи
 *.log
 logs/
-data/macros/
+data/macros/*
+!data/macros/example_macro.json

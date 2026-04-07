@@ -56,6 +56,17 @@ def _migrate_legacy_bindings(data: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def default_bindings_config() -> "BindingsConfig":
+    return BindingsConfig(
+        toggle_autoclick=HotkeyChord((), "f6"),
+        pause_autoclick=HotkeyChord((), "f7"),
+        toggle_macro_play=HotkeyChord((), "f8"),
+        toggle_record_macro=HotkeyChord((), "f9"),
+        toggle_tray=HotkeyChord((), "f10"),
+        emergency_stop=HotkeyChord((), "escape"),
+    )
+
+
 @dataclass
 class BindingsConfig:
     toggle_autoclick: HotkeyChord | None = None
@@ -64,6 +75,17 @@ class BindingsConfig:
     toggle_record_macro: HotkeyChord | None = None
     toggle_tray: HotkeyChord | None = None
     emergency_stop: HotkeyChord | None = None
+
+    def with_defaults(self) -> "BindingsConfig":
+        defaults = default_bindings_config()
+        return BindingsConfig(
+            toggle_autoclick=self.toggle_autoclick or defaults.toggle_autoclick,
+            pause_autoclick=self.pause_autoclick or defaults.pause_autoclick,
+            toggle_macro_play=self.toggle_macro_play or defaults.toggle_macro_play,
+            toggle_record_macro=self.toggle_record_macro or defaults.toggle_record_macro,
+            toggle_tray=self.toggle_tray or defaults.toggle_tray,
+            emergency_stop=self.emergency_stop or defaults.emergency_stop,
+        )
 
     def to_dict(self) -> dict[str, Any]:
         def opt(c: HotkeyChord | None) -> dict[str, Any] | None:

@@ -113,8 +113,14 @@ class AppSettings:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AppSettings:
         b = BindingsConfig.from_dict(data.get("bindings") or {})
-        theme = ThemeMode(data.get("theme", ThemeMode.DARK.value))
-        log_level = LogLevel(data.get("log_level", LogLevel.INFO.value))
+        try:
+            theme = ThemeMode(data.get("theme", ThemeMode.DARK.value))
+        except ValueError:
+            theme = ThemeMode.DARK
+        try:
+            log_level = LogLevel(data.get("log_level", LogLevel.INFO.value))
+        except ValueError:
+            log_level = LogLevel.INFO
         hb_raw = data.get("hotkey_backend", HotkeyBackend.AUTO.value)
         try:
             hotkey_backend = HotkeyBackend(hb_raw)

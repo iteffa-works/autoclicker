@@ -17,6 +17,9 @@
     "settings": "Settings",
     "logs": "Logs"
   },
+  "logs": {
+    "title": "Event log"
+  },
   "kb_test": {
     "history": "Keystroke history",
     "history_tooltip": "Show recent key presses",

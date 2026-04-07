@@ -10,13 +10,13 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QByteArray, QEvent, QSize, QTimer, Qt, QUrl, Signal
-from PySide6.QtGui import QColor, QCloseEvent, QDesktopServices, QIcon, QPainter, QPen, QPixmap, QShowEvent
+from PySide6.QtGui import QCloseEvent, QDesktopServices, QIcon, QPixmap, QShowEvent
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
     QCheckBox,
-    QComboBox as QtQComboBox,
-    QDoubleSpinBox as QtQDoubleSpinBox,
+    QComboBox,
+    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QFrame,
@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QScrollArea,
     QSizePolicy,
-    QSpinBox as QtQSpinBox,
+    QSpinBox,
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -44,6 +44,7 @@ from PySide6.QtWidgets import (
 
 from app.branding import (
     APP_VERSION,
+    APP_VERSION_CHANNEL,
     BRAND_TELEGRAM_URL,
     BRAND_WHATSAPP_URL,
     STUDIO_EMAIL,
@@ -74,6 +75,7 @@ from app.ui.app_icons import NAV_ICON_KEYS, app_icon, icon_kind_size
 from app.ui.keyboard_test_hooks import KeyboardTestHooks
 from app.ui.keyboard_test_ui import KeyboardTestPanel, MouseTestPanel
 from app.ui.overlay_widget import ActivityOverlay
+from app.ui.chevron_controls import QComboBox, QDoubleSpinBox, QSpinBox
 from app.ui.themed_checkbox import ThemedCheckBox as QCheckBox
 from app.ui.themed_checkbox import sync_themed_checkboxes
 from app.ui.design_tokens import (
@@ -113,101 +115,6 @@ _NAV_KEYS = (
     "nav.logs",
 )
 _NAV_INDEX_KEYBOARD_TEST = 2
-
-
-def _chevron_pixmap(direction: str, color: QColor) -> QPixmap:
-    pm = QPixmap(12, 8)
-    pm.fill(Qt.GlobalColor.transparent)
-    p = QPainter(pm)
-    p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-    pen = QPen(color, 1.7, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
-    p.setPen(pen)
-    if direction == "down":
-        p.drawLine(1, 2, 6, 6)
-        p.drawLine(6, 6, 11, 2)
-    else:
-        p.drawLine(1, 6, 6, 2)
-        p.drawLine(6, 2, 11, 6)
-    p.end()
-    return pm
-
-
-class _ChevronOverlayMixin:
-    def _overlay_color(self) -> QColor:
-        color = self.palette().color(self.foregroundRole())
-        if not color.isValid():
-            color = QColor("#CBD5E1")
-        color.setAlpha(235 if self.isEnabled() else 120)
-        return color
-
-    def _refresh_overlay_icons(self) -> None:
-        pass
-
-    def changeEvent(self, event: QEvent) -> None:
-        super().changeEvent(event)
-        if event.type() in (
-            QEvent.Type.EnabledChange,
-            QEvent.Type.PaletteChange,
-            QEvent.Type.StyleChange,
-        ):
-            self._refresh_overlay_icons()
-
-    def showEvent(self, event: QShowEvent) -> None:
-        super().showEvent(event)
-        self._refresh_overlay_icons()
-
-
-class QComboBox(_ChevronOverlayMixin, QtQComboBox):
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self._arrow_overlay = QLabel(self)
-        self._arrow_overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        self._arrow_overlay.setFixedSize(12, 8)
-
-    def resizeEvent(self, event) -> None:
-        super().resizeEvent(event)
-        x = self.width() - 22
-        y = (self.height() - self._arrow_overlay.height()) // 2
-        self._arrow_overlay.move(max(0, x), max(0, y))
-        self._arrow_overlay.raise_()
-
-    def _refresh_overlay_icons(self) -> None:
-        self._arrow_overlay.setPixmap(_chevron_pixmap("down", self._overlay_color()))
-        self._arrow_overlay.raise_()
-
-
-class _SpinChevronMixin(_ChevronOverlayMixin):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self._up_overlay = QLabel(self)
-        self._down_overlay = QLabel(self)
-        for overlay in (self._up_overlay, self._down_overlay):
-            overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-            overlay.setFixedSize(12, 8)
-
-    def resizeEvent(self, event) -> None:
-        super().resizeEvent(event)
-        btn_w = 22 if self.height() <= 34 else 28
-        x = self.width() - btn_w + (btn_w - self._up_overlay.width()) // 2
-        self._up_overlay.move(max(0, x), 4)
-        self._down_overlay.move(max(0, x), self.height() - self._down_overlay.height() - 4)
-        self._up_overlay.raise_()
-        self._down_overlay.raise_()
-
-    def _refresh_overlay_icons(self) -> None:
-        color = self._overlay_color()
-        self._up_overlay.setPixmap(_chevron_pixmap("up", color))
-        self._down_overlay.setPixmap(_chevron_pixmap("down", color))
-        self._up_overlay.raise_()
-        self._down_overlay.raise_()
-
-
-class QSpinBox(_SpinChevronMixin, QtQSpinBox):
-    pass
-
-
-class QDoubleSpinBox(_SpinChevronMixin, QtQDoubleSpinBox):
-    pass
 
 
 class _ResponsiveSettingsBody(QWidget):
@@ -327,6 +234,7 @@ class MainWindow(QMainWindow):
         self.status_refresh.connect(self._refresh_status)
         self._wire_engine_events()
         self._apply_theme()
+        self._retranslate_ui()
         self._refresh_status()
 
     def _apply_no_maximize_button(self) -> None:
@@ -1173,7 +1081,7 @@ class MainWindow(QMainWindow):
         return modes[idx] if idx < len(modes) else "simple"
 
     def _active_autoclick_state(self) -> AutoclickState:
-        return self._clicker.get_state(self._ac_work_mode_key())
+        return self._clicker.get_active_state()
 
     def _ac_start(self) -> None:
         self._sync_ac_settings_from_ui()
@@ -1220,7 +1128,7 @@ class MainWindow(QMainWindow):
         logging.getLogger(__name__).info("Автоклікер: старт")
 
     def _ac_pause(self) -> None:
-        self._clicker.pause(self._ac_work_mode_key())
+        self._clicker.pause()
         self._refresh_status()
 
     def _ac_stop(self) -> None:
@@ -1937,6 +1845,8 @@ class MainWindow(QMainWindow):
         return outer
 
     def _save_settings_ui(self) -> None:
+        prev_theme = self._settings.theme
+        prev_lang = normalize_ui_language(self._settings.ui_language)
         self._settings.theme = ThemeMode.DARK if self._set_theme.currentIndex() == 0 else ThemeMode.LIGHT
         _ld = self._set_lang.currentData()
         self._settings.ui_language = (
@@ -1966,7 +1876,11 @@ class MainWindow(QMainWindow):
         self._settings.bindings = bind_cfg
         save_settings(self._settings)
         self._presenter.notify_settings_saved()
-        self._apply_theme()
+        next_lang = normalize_ui_language(self._settings.ui_language)
+        if self._settings.theme != prev_theme:
+            self._apply_theme()
+        elif next_lang != prev_lang:
+            self._retranslate_ui()
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, self._settings.always_on_top)
         self._apply_no_maximize_button()
         self.show()
@@ -2044,7 +1958,7 @@ class MainWindow(QMainWindow):
         return (
             f'<span style="color:{muted};font-weight:600;font-size:12px;letter-spacing:0.02em;">© {year} </span>'
             f'<a href="{STUDIO_URL}" style="color:{link_c};font-weight:600;text-decoration:none;">FLOWAXY SOFTWARE</a>'
-            f'<span style="color:{muted};font-weight:600;font-size:12px;letter-spacing:0.02em;"> · {rights} · v{APP_VERSION}</span>'
+            f'<span style="color:{muted};font-weight:600;font-size:12px;letter-spacing:0.02em;"> · {rights} · v{APP_VERSION} {APP_VERSION_CHANNEL}</span>'
         )
 
     def _retranslate_ui(self) -> None:
@@ -2069,27 +1983,40 @@ class MainWindow(QMainWindow):
             b = self._nav_group.button(i)
             if b:
                 b.setText(_ICON_TEXT_GAP + tr(L, nk))
+        if hasattr(self, "_kb_panel"):
+            self._kb_panel.set_ui_language(self._settings.ui_language)
+        if hasattr(self, "_mouse_panel"):
+            self._mouse_panel.set_ui_language(self._settings.ui_language)
 
     def _apply_theme(self) -> None:
         self.setStyleSheet(stylesheet_for(self._settings.theme))
         sync_themed_checkboxes(self, self._settings.theme)
         self._refresh_ui_icons()
-        self._retranslate_ui()
         if hasattr(self, "_kb_panel"):
             self._kb_panel.set_theme(self._settings.theme)
-            self._kb_panel.set_ui_language(self._settings.ui_language)
         if hasattr(self, "_mouse_panel"):
             self._mouse_panel.set_theme(self._settings.theme)
-            self._mouse_panel.set_ui_language(self._settings.ui_language)
 
     def _is_busy(self) -> bool:
         if self._macro_engine.get_state() == AppRunState.PLAYING_MACRO:
             return True
         return self._active_autoclick_state() != AutoclickState.STOPPED
 
+    def _should_show_activity_overlay(self) -> bool:
+        """Показувати оверлей при активній автоматизації, якщо вікно сховане/згорнуте або фокус у іншій програмі (гра)."""
+        if not self._is_busy():
+            return False
+        if self.isHidden() or not self.isVisible():
+            return True
+        if bool(self.windowState() & Qt.WindowState.WindowMinimized):
+            return True
+        if not self.isActiveWindow():
+            return True
+        return False
+
     def _update_overlay_visibility(self) -> None:
         self._overlay.set_opacity(self._settings.overlay_opacity)
-        if not self._settings.minimize_to_tray or self.isVisible() or not self._is_busy():
+        if not self._should_show_activity_overlay():
             self._overlay.hide()
             return
         b = self._settings.bindings
@@ -2104,6 +2031,7 @@ class MainWindow(QMainWindow):
         self._overlay.set_text(title, "\n".join(lines) if lines else "Бинди не задані")
         self._overlay.show()
         self._overlay.raise_()
+        self._overlay.ensure_topmost_win32()
 
     def _refresh_status(self) -> None:
         self._footer_status.setProperty("state", "idle")

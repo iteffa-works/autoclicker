@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.models.bindings import BindingsConfig, HotkeyChord
+from app.models.bindings import BindingsConfig
 from app.models.settings import AppSettings
 from app.utils.json_io import read_json, write_json
 from app.utils.paths import binds_config_path, clicker_config_path, macros_meta_path, settings_path
@@ -90,19 +90,22 @@ def _migrate_legacy_monolithic(raw: dict[str, Any]) -> AppSettings:
 
 def load_merged_settings() -> AppSettings:
     """Load AppSettings from four files, or migrate legacy monolithic settings.json."""
-    raw_settings = read_json(settings_path(), {})
-    legacy = (not binds_config_path().exists()) and (raw_settings.get("bindings") is not None)
+    settings_p = settings_path()
+    clicker_p = clicker_config_path()
+    binds_p = binds_config_path()
+    macros_p = macros_meta_path()
+    raw_settings = read_json(settings_p, {})
+    legacy = (not binds_p.exists()) and (raw_settings.get("bindings") is not None)
     if legacy:
         s = _migrate_legacy_monolithic(raw_settings)
     else:
-        sd = read_json(settings_path(), {})
-        cd = read_json(clicker_config_path(), {}) if clicker_config_path().exists() else {}
-        bd = read_json(binds_config_path(), {}) if binds_config_path().exists() else {}
-        md = read_json(macros_meta_path(), {}) if macros_meta_path().exists() else {}
+        sd = read_json(settings_p, {})
+        cd = read_json(clicker_p, {}) if clicker_p.exists() else {}
+        bd = read_json(binds_p, {}) if binds_p.exists() else {}
+        md = read_json(macros_p, {}) if macros_p.exists() else {}
         merged = _merge_load(sd, cd, bd, md)
         s = AppSettings.from_dict(merged)
-    if s.bindings.emergency_stop is None:
-        s.bindings.emergency_stop = HotkeyChord((), "escape")
+    s.bindings = s.bindings.with_defaults()
     return s
 
 

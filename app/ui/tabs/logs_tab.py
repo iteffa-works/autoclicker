@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
+from app.i18n import normalize_ui_language, tr
+
 if TYPE_CHECKING:
     from app.ui.main_window import MainWindow
 
@@ -21,7 +23,7 @@ def build_logs_tab(main: MainWindow) -> QWidget:
     _log_icon = QLabel()
     _log_icon.setObjectName("sectionTitleIcon")
     main._register_icon_widget(_log_icon, "section_logs", "section")
-    _log_title = QLabel("Журнал подій")
+    _log_title = QLabel(tr(normalize_ui_language(main._settings.ui_language), "logs.title"))
     _log_title.setObjectName("logSectionTitle")
     head.addWidget(_log_icon, 0, Qt.AlignmentFlag.AlignVCenter)
     head.addWidget(_log_title, 0, Qt.AlignmentFlag.AlignVCenter)

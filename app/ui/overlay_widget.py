@@ -1,10 +1,15 @@
-"""Small always-on-top overlay when app is minimized to tray while automation runs."""
+"""Оверлей статусу при згортанні / поверх ігор (Win32 topmost)."""
 
 from __future__ import annotations
+
+import sys
+
+import ctypes
 
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
+
 
 class ActivityOverlay(QWidget):
     """Shows status and bind hints; emergency stop."""
@@ -57,6 +62,25 @@ class ActivityOverlay(QWidget):
         y = g.top() + 80
         self.move(QPoint(x, y))
 
+    def ensure_topmost_win32(self) -> None:
+        """Поверх повноекранних вікон (borderless); exclusive fullscreen може перекривати ОС."""
+        if sys.platform != "win32":
+            return
+        try:
+            hwnd = int(self.winId())
+        except (AttributeError, TypeError, ValueError):
+            return
+        if not hwnd:
+            return
+        HWND_TOPMOST = -1
+        SWP_NOMOVE = 0x0002
+        SWP_NOSIZE = 0x0001
+        SWP_NOACTIVATE = 0x0010
+        SWP_SHOWWINDOW = 0x0040
+        flags = SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW | SWP_NOACTIVATE
+        ctypes.windll.user32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, flags)
+
     def showEvent(self, event) -> None:
         super().showEvent(event)
         self.reposition_right()
+        self.ensure_topmost_win32()

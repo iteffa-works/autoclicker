@@ -7,63 +7,14 @@ import threading
 import time
 from dataclasses import dataclass
 
-from pynput.keyboard import Key, KeyCode
 from pynput.keyboard import Controller as KeyboardController
 from pynput.mouse import Button, Controller as MouseController
 
 from app.core.event_bus import AppEvent, EventBus, EventType
+from app.core.key_tokens import parse_key_token
 from app.core.state import AutoclickState
 from app.models.autoclick_sequence import AutoclickSequenceStep, AutoclickSequenceStepType, SequenceRepeatMode
 from app.utils.timing import monotonic_now, sleep_until_deadline
-
-
-def _parse_key(token: str) -> Key | KeyCode | None:
-    t = token.lower().strip()
-    named = {
-        "space": Key.space,
-        "enter": Key.enter,
-        "tab": Key.tab,
-        "esc": Key.esc,
-        "escape": Key.esc,
-        "backspace": Key.backspace,
-        "shift": Key.shift,
-        "ctrl": Key.ctrl,
-        "alt": Key.alt,
-        "up": Key.up,
-        "down": Key.down,
-        "left": Key.left,
-        "right": Key.right,
-        "home": Key.home,
-        "end": Key.end,
-        "page_up": Key.page_up,
-        "page_down": Key.page_down,
-        "insert": Key.insert,
-        "delete": Key.delete,
-    }
-    if t in named:
-        return named[t]
-    if t.startswith("f") and len(t) > 1 and t[1:].isdigit():
-        n = int(t[1:])
-        fs = {
-            1: Key.f1,
-            2: Key.f2,
-            3: Key.f3,
-            4: Key.f4,
-            5: Key.f5,
-            6: Key.f6,
-            7: Key.f7,
-            8: Key.f8,
-            9: Key.f9,
-            10: Key.f10,
-            11: Key.f11,
-            12: Key.f12,
-        }
-        return fs.get(n)
-    if len(t) == 1:
-        return KeyCode.from_char(t)
-    if t.startswith("vk") and t[2:].isdigit():
-        return KeyCode.from_vk(int(t[2:]))
-    return None
 
 
 def _mouse_btn(name: str) -> Button:
@@ -197,7 +148,7 @@ class SequenceAutoclickerEngine:
                 with self._lock:
                     cfg = self._config
                 token = cfg.key_repeat_token.strip()
-                k = _parse_key(token) if token else None
+                k = parse_key_token(token) if token else None
                 if k is not None:
                     try:
                         self._kb.press(k)
@@ -247,14 +198,14 @@ class SequenceAutoclickerEngine:
                 deadline = monotonic_now() + ms / 1000.0
                 sleep_until_deadline(deadline)
         elif st.type == AutoclickSequenceStepType.KEY_DOWN:
-            k = _parse_key(st.key or "")
+            k = parse_key_token(st.key or "")
             if k is not None:
                 try:
                     self._kb.press(k)
                 except Exception:
                     pass
         elif st.type == AutoclickSequenceStepType.KEY_UP:
-            k = _parse_key(st.key or "")
+            k = parse_key_token(st.key or "")
             if k is not None:
                 try:
                     self._kb.release(k)

@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "name": "example",
+  "events": [
+    { "kind": "key_down", "delay_ms": 0, "key": "a" },
+    { "kind": "key_up", "delay_ms": 50, "key": "a" }
+  ]
+}

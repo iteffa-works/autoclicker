@@ -2,6 +2,7 @@
 
 APP_NAME = "Autoclicker"
 APP_VERSION = "1.0.0"
+APP_VERSION_CHANNEL = "Alpha"
 
 STUDIO_AUTHOR = "Flowaxy Solutions"
 STUDIO_EMAIL = "contact@flowaxy.com"

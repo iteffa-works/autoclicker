@@ -11,24 +11,12 @@ from pynput.keyboard import Key, KeyCode
 from pynput.mouse import Button, Controller as MouseController
 
 from app.core.event_bus import AppEvent, EventBus, EventType
+from app.core.key_tokens import key_token_from_pynput, mod_name_from_key, normalize_key_token, parse_key_token
 from app.core.state import AppRunState
 from app.models.bindings import BindingsConfig
 from app.models.macro import MacroDefinition, MacroEvent, MacroEventType, MacroSpeedMode
 from app.models.recording_profile import RecordingProfile
 from app.utils.timing import sleep_until_deadline
-
-
-def _key_token(vk: Key | KeyCode | None) -> str:
-    if vk is None:
-        return "unknown"
-    if isinstance(vk, Key):
-        return vk.name if vk.name else str(vk)
-    try:
-        if vk.char:
-            return vk.char.lower()
-    except AttributeError:
-        pass
-    return f"vk{vk.vk}" if getattr(vk, "vk", None) else str(vk)
 
 
 def _button_token(b: Button) -> str:
@@ -39,31 +27,12 @@ def _button_token(b: Button) -> str:
     return "middle"
 
 
-def _normalize_key_token(raw: str) -> str:
-    t = raw.lower().strip()
-    if t in ("esc",):
-        return "escape"
-    return t
-
-
-def _mod_name_from_key(key: Key | KeyCode | None) -> str | None:
-    if key == Key.ctrl_l or key == Key.ctrl_r:
-        return "ctrl"
-    if key == Key.alt_l or key == Key.alt_r:
-        return "alt"
-    if key == Key.shift_l or key == Key.shift_r:
-        return "shift"
-    if key == Key.cmd:
-        return "win"
-    return None
-
-
 def _matches_bound_chord(mods: set[str], key_token: str, bindings: BindingsConfig) -> bool:
     """True if current mods + key equals any assigned hotkey chord."""
-    kt = _normalize_key_token(key_token)
+    kt = normalize_key_token(key_token)
     mods_t = tuple(sorted(mods))
     for _, ch in bindings.all_assigned():
-        if tuple(sorted(ch.modifiers)) == mods_t and _normalize_key_token(ch.key) == kt:
+        if tuple(sorted(ch.modifiers)) == mods_t and normalize_key_token(ch.key) == kt:
             return True
     return False
 
@@ -120,10 +89,10 @@ class MacroRecordSession:
         """Return True if event should be skipped (bound hotkey)."""
         if not self._profile.filter_binding_chords or not self._bindings:
             return False
-        mn = _mod_name_from_key(key)
+        mn = mod_name_from_key(key)
         if mn:
             return False
-        tok = _key_token(key)
+        tok = key_token_from_pynput(key)
         if _matches_bound_chord(self._mods, tok, self._bindings):
             return True
         return False
@@ -131,33 +100,33 @@ class MacroRecordSession:
     def _on_press(self, key: Key | KeyCode | None) -> None:
         if not self._profile.record_keyboard:
             return
-        mn = _mod_name_from_key(key)
+        mn = mod_name_from_key(key)
         if mn:
             self._mods.add(mn)
             self._append(
-                MacroEvent(kind=MacroEventType.KEY_DOWN, delay_ms=0.0, key=_key_token(key))
+                MacroEvent(kind=MacroEventType.KEY_DOWN, delay_ms=0.0, key=key_token_from_pynput(key))
             )
             return
         if self._filter_keyboard_event(key, True):
             return
         self._append(
-            MacroEvent(kind=MacroEventType.KEY_DOWN, delay_ms=0.0, key=_key_token(key))
+            MacroEvent(kind=MacroEventType.KEY_DOWN, delay_ms=0.0, key=key_token_from_pynput(key))
         )
 
     def _on_release(self, key: Key | KeyCode | None) -> None:
         if not self._profile.record_keyboard:
             return
-        mn = _mod_name_from_key(key)
+        mn = mod_name_from_key(key)
         if mn:
             self._mods.discard(mn)
             self._append(
-                MacroEvent(kind=MacroEventType.KEY_UP, delay_ms=0.0, key=_key_token(key))
+                MacroEvent(kind=MacroEventType.KEY_UP, delay_ms=0.0, key=key_token_from_pynput(key))
             )
             return
         if self._filter_keyboard_event(key, False):
             return
         self._append(
-            MacroEvent(kind=MacroEventType.KEY_UP, delay_ms=0.0, key=_key_token(key))
+            MacroEvent(kind=MacroEventType.KEY_UP, delay_ms=0.0, key=key_token_from_pynput(key))
         )
 
     def _on_move(self, x: int, y: int) -> None:
@@ -248,9 +217,11 @@ class MacroEngine:
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
         self._state = AppRunState.IDLE
+        self._lock = threading.Lock()
 
     def get_state(self) -> AppRunState:
-        return self._state
+        with self._lock:
+            return self._state
 
     def stop(self) -> None:
         self._stop.set()
@@ -258,7 +229,8 @@ class MacroEngine:
         if t and t.is_alive():
             t.join(timeout=3.0)
         self._thread = None
-        self._state = AppRunState.IDLE
+        with self._lock:
+            self._state = AppRunState.IDLE
 
     def play(
         self,
@@ -268,7 +240,8 @@ class MacroEngine:
     ) -> None:
         self.stop()
         self._stop.clear()
-        self._state = AppRunState.PLAYING_MACRO
+        with self._lock:
+            self._state = AppRunState.PLAYING_MACRO
         if self._bus:
             self._bus.publish(AppEvent(EventType.MACRO_PLAY_STARTED))
 
@@ -284,7 +257,8 @@ class MacroEngine:
                         break
                     i += 1
             finally:
-                self._state = AppRunState.IDLE
+                with self._lock:
+                    self._state = AppRunState.IDLE
                 if self._bus:
                     self._bus.publish(AppEvent(EventType.MACRO_PLAY_STOPPED))
                 if callable(on_finished):
@@ -305,11 +279,11 @@ class MacroEngine:
 
     def _emit_event(self, ev: MacroEvent) -> None:
         if ev.kind == MacroEventType.KEY_DOWN:
-            k = self._parse_key(ev.key or "")
+            k = parse_key_token(ev.key or "")
             if k is not None:
                 self._kb.press(k)
         elif ev.kind == MacroEventType.KEY_UP:
-            k = self._parse_key(ev.key or "")
+            k = parse_key_token(ev.key or "")
             if k is not None:
                 self._kb.release(k)
         elif ev.kind == MacroEventType.MOUSE_MOVE:
@@ -338,56 +312,3 @@ class MacroEngine:
             return Button.middle
         return Button.left
 
-    def _parse_key(self, token: str) -> Key | KeyCode | None:
-        t = token.lower().strip()
-        named = {
-            "space": Key.space,
-            "enter": Key.enter,
-            "tab": Key.tab,
-            "esc": Key.esc,
-            "escape": Key.esc,
-            "backspace": Key.backspace,
-            "shift": Key.shift,
-            "shift_l": Key.shift_l,
-            "shift_r": Key.shift_r,
-            "ctrl": Key.ctrl,
-            "ctrl_l": Key.ctrl_l,
-            "ctrl_r": Key.ctrl_r,
-            "alt": Key.alt,
-            "alt_l": Key.alt_l,
-            "alt_r": Key.alt_r,
-            "up": Key.up,
-            "down": Key.down,
-            "left": Key.left,
-            "right": Key.right,
-            "home": Key.home,
-            "end": Key.end,
-            "page_up": Key.page_up,
-            "page_down": Key.page_down,
-            "insert": Key.insert,
-            "delete": Key.delete,
-        }
-        if t in named:
-            return named[t]
-        if t.startswith("f") and t[1:].isdigit():
-            n = int(t[1:])
-            fs = {
-                1: Key.f1,
-                2: Key.f2,
-                3: Key.f3,
-                4: Key.f4,
-                5: Key.f5,
-                6: Key.f6,
-                7: Key.f7,
-                8: Key.f8,
-                9: Key.f9,
-                10: Key.f10,
-                11: Key.f11,
-                12: Key.f12,
-            }
-            return fs.get(n)
-        if len(t) == 1:
-            return KeyCode.from_char(t)
-        if t.startswith("vk") and t[2:].isdigit():
-            return KeyCode.from_vk(int(t[2:]))
-        return None

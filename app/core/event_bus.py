@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
@@ -35,6 +36,7 @@ Handler = Callable[[AppEvent], None]
 class EventBus:
     def __init__(self) -> None:
         self._subs: dict[EventType, list[Handler]] = defaultdict(list)
+        self._log = logging.getLogger(__name__)
 
     def subscribe(self, kind: EventType, handler: Handler) -> None:
         self._subs[kind].append(handler)
@@ -50,4 +52,4 @@ class EventBus:
             try:
                 h(event)
             except Exception:
-                pass
+                self._log.exception("Event handler failed for %s", event.type)
