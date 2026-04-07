@@ -10,13 +10,13 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QByteArray, QEvent, QSize, QTimer, Qt, QUrl, Signal
-from PySide6.QtGui import QCloseEvent, QDesktopServices, QIcon, QPixmap, QShowEvent
+from PySide6.QtGui import QColor, QCloseEvent, QDesktopServices, QIcon, QPainter, QPen, QPixmap, QShowEvent
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
     QCheckBox,
-    QComboBox,
-    QDoubleSpinBox,
+    QComboBox as QtQComboBox,
+    QDoubleSpinBox as QtQDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QFrame,
@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QScrollArea,
     QSizePolicy,
-    QSpinBox,
+    QSpinBox as QtQSpinBox,
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -85,6 +85,10 @@ from app.ui.design_tokens import (
     FORM_COMBO_MAX_W,
     FORM_FIELD_MAX_W,
     FORM_LABEL_MIN_W,
+    SETTINGS_CONTENT_MAX_W,
+    SETTINGS_GRID_BREAKPOINT_W,
+    SETTINGS_INLINE_LABEL_W,
+    SETTINGS_NUM_FIELD_MAX_W,
     MACRO_SIDE_BTN_MIN_W,
     S16,
     S24,
@@ -109,6 +113,170 @@ _NAV_KEYS = (
     "nav.logs",
 )
 _NAV_INDEX_KEYBOARD_TEST = 2
+
+
+def _chevron_pixmap(direction: str, color: QColor) -> QPixmap:
+    pm = QPixmap(12, 8)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    pen = QPen(color, 1.7, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+    p.setPen(pen)
+    if direction == "down":
+        p.drawLine(1, 2, 6, 6)
+        p.drawLine(6, 6, 11, 2)
+    else:
+        p.drawLine(1, 6, 6, 2)
+        p.drawLine(6, 2, 11, 6)
+    p.end()
+    return pm
+
+
+class _ChevronOverlayMixin:
+    def _overlay_color(self) -> QColor:
+        color = self.palette().color(self.foregroundRole())
+        if not color.isValid():
+            color = QColor("#CBD5E1")
+        color.setAlpha(235 if self.isEnabled() else 120)
+        return color
+
+    def _refresh_overlay_icons(self) -> None:
+        pass
+
+    def changeEvent(self, event: QEvent) -> None:
+        super().changeEvent(event)
+        if event.type() in (
+            QEvent.Type.EnabledChange,
+            QEvent.Type.PaletteChange,
+            QEvent.Type.StyleChange,
+        ):
+            self._refresh_overlay_icons()
+
+    def showEvent(self, event: QShowEvent) -> None:
+        super().showEvent(event)
+        self._refresh_overlay_icons()
+
+
+class QComboBox(_ChevronOverlayMixin, QtQComboBox):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._arrow_overlay = QLabel(self)
+        self._arrow_overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self._arrow_overlay.setFixedSize(12, 8)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        x = self.width() - 22
+        y = (self.height() - self._arrow_overlay.height()) // 2
+        self._arrow_overlay.move(max(0, x), max(0, y))
+        self._arrow_overlay.raise_()
+
+    def _refresh_overlay_icons(self) -> None:
+        self._arrow_overlay.setPixmap(_chevron_pixmap("down", self._overlay_color()))
+        self._arrow_overlay.raise_()
+
+
+class _SpinChevronMixin(_ChevronOverlayMixin):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._up_overlay = QLabel(self)
+        self._down_overlay = QLabel(self)
+        for overlay in (self._up_overlay, self._down_overlay):
+            overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            overlay.setFixedSize(12, 8)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        btn_w = 22 if self.height() <= 34 else 28
+        x = self.width() - btn_w + (btn_w - self._up_overlay.width()) // 2
+        self._up_overlay.move(max(0, x), 4)
+        self._down_overlay.move(max(0, x), self.height() - self._down_overlay.height() - 4)
+        self._up_overlay.raise_()
+        self._down_overlay.raise_()
+
+    def _refresh_overlay_icons(self) -> None:
+        color = self._overlay_color()
+        self._up_overlay.setPixmap(_chevron_pixmap("up", color))
+        self._down_overlay.setPixmap(_chevron_pixmap("down", color))
+        self._up_overlay.raise_()
+        self._down_overlay.raise_()
+
+
+class QSpinBox(_SpinChevronMixin, QtQSpinBox):
+    pass
+
+
+class QDoubleSpinBox(_SpinChevronMixin, QtQDoubleSpinBox):
+    pass
+
+
+class _ResponsiveSettingsBody(QWidget):
+    """Дві колонки карток налаштувань; при вузькій ширині — одна колонка. Бинди на всю ширину знизу."""
+
+    __slots__ = ("_binds", "_bp", "_c1", "_c2", "_c3", "_c4", "_grid", "_wide")
+
+    def __init__(
+        self,
+        card_general: QFrame,
+        card_behavior: QFrame,
+        card_macro: QFrame,
+        card_log: QFrame,
+        binds: QFrame,
+        *,
+        breakpoint_w: int,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._c1 = card_general
+        self._c2 = card_behavior
+        self._c3 = card_macro
+        self._c4 = card_log
+        self._binds = binds
+        self._bp = breakpoint_w
+        self._wide = True
+        self._grid = QGridLayout(self)
+        self._grid.setContentsMargins(0, 0, 0, 0)
+        self._grid.setHorizontalSpacing(11)
+        self._grid.setVerticalSpacing(11)
+        self.setMaximumWidth(SETTINGS_CONTENT_MAX_W)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self._apply_layout()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        w = self.width()
+        if w <= 0:
+            return
+        wide = w >= self._bp
+        if wide != self._wide:
+            self._wide = wide
+            self._apply_layout()
+
+    def _clear_grid(self) -> None:
+        while self._grid.count():
+            item = self._grid.takeAt(0)
+            if item is None:
+                break
+
+    def _apply_layout(self) -> None:
+        self._clear_grid()
+        top = Qt.AlignmentFlag.AlignTop
+        if self._wide:
+            self._grid.setColumnStretch(0, 1)
+            self._grid.setColumnStretch(1, 1)
+            self._grid.addWidget(self._c1, 0, 0, 1, 1, top)
+            self._grid.addWidget(self._c2, 0, 1, 1, 1, top)
+            self._grid.addWidget(self._c3, 1, 0, 1, 1, top)
+            self._grid.addWidget(self._c4, 1, 1, 1, 1, top)
+            self._grid.addWidget(self._binds, 2, 0, 1, 2, top)
+        else:
+            self._grid.setColumnStretch(0, 1)
+            self._grid.setColumnStretch(1, 0)
+            self._grid.addWidget(self._c1, 0, 0, 1, 2, top)
+            self._grid.addWidget(self._c2, 1, 0, 1, 2, top)
+            self._grid.addWidget(self._c3, 2, 0, 1, 2, top)
+            self._grid.addWidget(self._c4, 3, 0, 1, 2, top)
+            self._grid.addWidget(self._binds, 4, 0, 1, 2, top)
 
 
 class MainWindow(QMainWindow):
@@ -294,7 +462,7 @@ class MainWindow(QMainWindow):
         ls = QHBoxLayout(w_set)
         ls.setContentsMargins(0, 0, 0, 0)
         self._btn_save_settings = QPushButton(_ICON_TEXT_GAP + "Зберегти налаштування")
-        self._btn_save_settings.setObjectName("headerActionButton")
+        self._btn_save_settings.setObjectName("headerPrimaryButton")
         self._btn_save_settings.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
         self._btn_save_settings.clicked.connect(self._save_settings_ui)
         self._register_icon_widget(self._btn_save_settings, "action_save", "toolbar")
@@ -567,6 +735,37 @@ class MainWindow(QMainWindow):
         lb.setFixedWidth(176)
         lb.setWordWrap(True)
         return lb
+
+    def _settings_card(self, title: str) -> tuple[QFrame, QVBoxLayout]:
+        card = QFrame()
+        card.setObjectName("settingsCard")
+        outer = QVBoxLayout(card)
+        outer.setContentsMargins(10, 10, 10, 10)
+        outer.setSpacing(4)
+        tl = QLabel(title)
+        tl.setObjectName("settingsCardTitle")
+        tl.setWordWrap(True)
+        outer.addWidget(tl)
+        rows = QVBoxLayout()
+        rows.setSpacing(5)
+        rows.setContentsMargins(0, 0, 0, 0)
+        outer.addLayout(rows)
+        return card, rows
+
+    def _settings_inline_row(self, label_text: str, widget: QWidget) -> QWidget:
+        w = QWidget()
+        h = QHBoxLayout(w)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(8)
+        lab = QLabel(label_text)
+        lab.setObjectName("settingsFormLabel")
+        lab.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        lab.setFixedWidth(SETTINGS_INLINE_LABEL_W)
+        lab.setWordWrap(True)
+        widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        h.addWidget(lab, 0, Qt.AlignmentFlag.AlignTop)
+        h.addWidget(widget, 1, Qt.AlignmentFlag.AlignVCenter)
+        return w
 
     def _field_max_width(self, w: QWidget, max_w: int) -> None:
         w.setMaximumWidth(max_w)
@@ -1492,15 +1691,9 @@ class MainWindow(QMainWindow):
         (p / old).rename(p / new)
         self._refresh_macro_list()
 
-    def _build_binds_section(self) -> QWidget:
-        w = QWidget()
-        lay = QFormLayout(w)
-        lay.setLabelAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        lay.setFormAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-        lay.setHorizontalSpacing(8)
-        lay.setVerticalSpacing(6)
-        lay.setContentsMargins(0, 0, 0, 0)
-        self._bind_fields: dict[str, QLineEdit] = {}
+    def _build_binds_section(self) -> QFrame:
+        card, lay = self._settings_card("Гарячі клавіші (бинди)")
+        self._bind_fields = {}
         names = [
             ("toggle_autoclick", "Перемикач автоклікера"),
             ("pause_autoclick", "Пауза"),
@@ -1510,31 +1703,42 @@ class MainWindow(QMainWindow):
             ("emergency_stop", "Аварійна зупинка"),
         ]
         for key, title in names:
-            row = QHBoxLayout()
-            row.setSpacing(6)
+            row = QFrame()
+            row.setObjectName("bindHotkeyRow")
+            h = QHBoxLayout(row)
+            h.setContentsMargins(0, 0, 0, 0)
+            h.setSpacing(6)
+            lbl = QLabel(title)
+            lbl.setObjectName("bindHotkeyActionLabel")
+            lbl.setFixedWidth(SETTINGS_INLINE_LABEL_W)
+            lbl.setWordWrap(True)
+            lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
             le = QLineEdit()
             le.setReadOnly(True)
+            le.setMinimumHeight(30)
+            le.setMaximumHeight(32)
             b_listen = QPushButton("Слухати")
             b_clear = QPushButton("Очистити")
-            b_listen.setMinimumWidth(96)
-            b_clear.setMinimumWidth(88)
+            b_listen.setObjectName("bindHotkeyRowButton")
+            b_clear.setObjectName("bindHotkeyRowButton")
+            b_listen.setFixedWidth(80)
+            b_clear.setFixedWidth(76)
+            b_listen.setMinimumHeight(30)
+            b_listen.setMaximumHeight(32)
+            b_clear.setMinimumHeight(30)
+            b_clear.setMaximumHeight(32)
             b_listen.clicked.connect(lambda checked=False, k=key: self._bind_listen(k))
             b_clear.clicked.connect(lambda checked=False, k=key: self._bind_clear(k))
             self._register_icon_widget(b_listen, "action_listen", "toolbar")
             self._register_icon_widget(b_clear, "action_clear", "toolbar")
-            row.addWidget(le, 1)
-            row.addWidget(b_listen)
-            row.addWidget(b_clear)
-            rw = QWidget()
-            rw.setLayout(row)
-            lay.addRow(self._bind_row_label(title), rw)
+            h.addWidget(lbl, 0)
+            h.addWidget(le, 1)
+            h.addWidget(b_listen, 0)
+            h.addWidget(b_clear, 0)
+            lay.addWidget(row)
             self._bind_fields[key] = le
         self._load_binds_to_ui()
-        self._btn_apply_binds = QPushButton("Застосувати бинди")
-        self._btn_apply_binds.clicked.connect(self._apply_binds_from_ui)
-        self._register_icon_widget(self._btn_apply_binds, "action_apply", "toolbar")
-        lay.addRow(self._btn_apply_binds)
-        return w
+        return card
 
     def _chord_to_text(self, ch: HotkeyChord | None) -> str:
         return ch.display_string() if ch else ""
@@ -1591,18 +1795,6 @@ class MainWindow(QMainWindow):
     def _bind_clear(self, field: str) -> None:
         self._bind_fields[field].clear()
 
-    def _apply_binds_from_ui(self) -> None:
-        cfg = self._read_binds_from_ui()
-        errs = validate_bindings(cfg)
-        if errs:
-            QMessageBox.warning(self, "Бинди", "\n".join(errs))
-            return
-        self._settings.bindings = cfg
-        save_settings(self._settings)
-        self._apply_hotkeys()
-        self._update_ac_button_hotkey_labels()
-        logging.getLogger(__name__).info("Бинди оновлено")
-
     def _build_settings_tab(self) -> QWidget:
         outer = QWidget()
         outer_lay = QVBoxLayout(outer)
@@ -1617,15 +1809,8 @@ class MainWindow(QMainWindow):
         inner = QWidget()
         inner.setObjectName("settingsTabRoot")
         vl = QVBoxLayout(inner)
-        vl.setSpacing(8)
-        vl.setContentsMargins(0, 0, 4, 0)
-
-        settings_block = QWidget()
-        grid = QGridLayout(settings_block)
-        grid.setHorizontalSpacing(8)
-        grid.setVerticalSpacing(5)
-        grid.setContentsMargins(0, 0, 0, 0)
-        grid.setColumnStretch(1, 1)
+        vl.setSpacing(11)
+        vl.setContentsMargins(14, 12, 14, 12)
 
         self._set_theme = QComboBox()
         self._set_theme.addItems(["Темна", "Світла"])
@@ -1663,12 +1848,15 @@ class MainWindow(QMainWindow):
         self._set_overlay_op.setRange(0.3, 1.0)
         self._set_overlay_op.setSingleStep(0.05)
         self._set_overlay_op.setValue(self._settings.overlay_opacity)
+        self._set_overlay_op.setAlignment(Qt.AlignmentFlag.AlignRight)
         self._set_autosave = QCheckBox("Увімкнути")
         self._set_autosave.setChecked(self._settings.autosave_macros)
         self._set_autosave_sec = QSpinBox()
         self._set_autosave_sec.setRange(5, 600)
         self._set_autosave_sec.setValue(self._settings.autosave_interval_sec)
+        self._set_autosave_sec.setAlignment(Qt.AlignmentFlag.AlignRight)
         self._set_macros_dir = QLineEdit(self._settings.macros_folder)
+        self._set_macros_dir.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._set_log_level = QComboBox()
         self._set_log_level.addItems([x.value for x in LogLevel])
         self._set_log_level.setCurrentText(self._settings.log_level.value)
@@ -1677,127 +1865,73 @@ class MainWindow(QMainWindow):
         self._set_jitter = QDoubleSpinBox()
         self._set_jitter.setRange(0, 50)
         self._set_jitter.setValue(self._settings.jitter_percent)
+        self._set_jitter.setAlignment(Qt.AlignmentFlag.AlignRight)
 
-        r = 0
-        grid.addWidget(
-            self._settings_lbl("Тема"),
-            r,
-            0,
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-        )
-        grid.addWidget(self._set_theme, r, 1)
-        r += 1
-        grid.addWidget(
-            self._settings_lbl("Мова інтерфейсу"),
-            r,
-            0,
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-        )
-        grid.addWidget(self._set_lang, r, 1)
-        r += 1
+        c1, l1 = self._settings_card("Загальні")
+        l1.addWidget(self._settings_inline_row("Тема", self._set_theme))
+        l1.addWidget(self._settings_inline_row("Мова інтерфейсу", self._set_lang))
 
+        c2, l2 = self._settings_card("Поведінка")
         ch_wrap = QWidget()
-        ch_l = QVBoxLayout(ch_wrap)
-        ch_l.setSpacing(2)
+        ch_l = QGridLayout(ch_wrap)
         ch_l.setContentsMargins(0, 0, 0, 0)
-        for cx in (self._set_top, self._set_sound, self._set_tray, self._set_close_tray):
-            ch_l.addWidget(cx)
-        grid.addWidget(
-            self._settings_lbl("Поведінка"),
-            r,
-            0,
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop,
-        )
-        grid.addWidget(ch_wrap, r, 1)
-        r += 1
+        ch_l.setHorizontalSpacing(12)
+        ch_l.setVerticalSpacing(3)
+        ch_l.addWidget(self._set_top, 0, 0)
+        ch_l.addWidget(self._set_sound, 0, 1)
+        ch_l.addWidget(self._set_tray, 1, 0)
+        ch_l.addWidget(self._set_close_tray, 1, 1)
+        ch_l.setColumnStretch(0, 1)
+        ch_l.setColumnStretch(1, 1)
+        l2.addWidget(self._settings_inline_row("Вікно та трей", ch_wrap))
+        l2.addWidget(self._settings_inline_row("Глобальні клавіші (бекенд)", self._set_hk_backend))
+        l2.addWidget(self._settings_inline_row("Прозорість оверлею", self._set_overlay_op))
 
-        grid.addWidget(
-            self._settings_lbl("Глобальні клавіші"),
-            r,
-            0,
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-        )
-        grid.addWidget(self._set_hk_backend, r, 1)
-        r += 1
-        grid.addWidget(
-            self._settings_lbl("Прозорість оверлею"),
-            r,
-            0,
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-        )
-        grid.addWidget(self._set_overlay_op, r, 1)
-        r += 1
-
+        c3, l3 = self._settings_card("Автоклік / макроси")
         as_row = QWidget()
         as_h = QHBoxLayout(as_row)
         as_h.setContentsMargins(0, 0, 0, 0)
-        as_h.setSpacing(8)
+        as_h.setSpacing(6)
         as_h.addWidget(self._set_autosave)
         il_as = QLabel("Інтервал (с)")
         il_as.setObjectName("formInlineLabel")
         as_h.addWidget(il_as)
         as_h.addWidget(self._set_autosave_sec)
         as_h.addStretch(1)
-        grid.addWidget(
-            self._settings_lbl("Автозбереження макросу"),
-            r,
-            0,
-            Qt.AlignmentFlag.AlignVCenter,
-        )
-        grid.addWidget(as_row, r, 1)
-        r += 1
+        l3.addWidget(self._settings_inline_row("Автозбереження макросу", as_row))
+        l3.addWidget(self._settings_inline_row("Папка макросів (порожньо = типова)", self._set_macros_dir))
+        l3.addWidget(self._settings_inline_row("Jitter % (загальний)", self._set_jitter))
 
-        grid.addWidget(
-            self._settings_lbl("Папка макросів (порожньо = типова)"),
-            r,
-            0,
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-        )
-        grid.addWidget(self._set_macros_dir, r, 1)
-        r += 1
-        grid.addWidget(
-            self._settings_lbl("Рівень логу"),
-            r,
-            0,
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-        )
-        grid.addWidget(self._set_log_level, r, 1)
-        r += 1
-        grid.addWidget(
-            self._settings_lbl("Лог у файл"),
-            r,
-            0,
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-        )
-        grid.addWidget(self._set_log_file, r, 1)
-        r += 1
-        grid.addWidget(
-            self._settings_lbl("Jitter % (загальний)"),
-            r,
-            0,
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-        )
-        grid.addWidget(self._set_jitter, r, 1)
-        r += 1
+        c4, l4 = self._settings_card("Логування")
+        l4.addWidget(self._settings_inline_row("Рівень логу", self._set_log_level))
+        l4.addWidget(self._settings_inline_row("Лог у файл", self._set_log_file))
 
         self._field_max_width(self._set_theme, FORM_COMBO_MAX_W)
         self._field_max_width(self._set_hk_backend, FORM_COMBO_MAX_W)
-        self._field_max_width(self._set_overlay_op, FORM_FIELD_MAX_W)
+        self._field_max_width(self._set_overlay_op, SETTINGS_NUM_FIELD_MAX_W)
         self._field_max_width(self._set_autosave_sec, 120)
         self._field_max_width(self._set_log_level, FORM_COMBO_MAX_W)
         self._field_max_width(self._set_lang, FORM_COMBO_MAX_W)
-        self._field_max_width(self._set_jitter, FORM_FIELD_MAX_W)
+        self._field_max_width(self._set_jitter, SETTINGS_NUM_FIELD_MAX_W)
 
-        vl.addWidget(settings_block)
-        div = QFrame()
-        div.setObjectName("settingsSectionDivider")
-        div.setFrameShape(QFrame.Shape.HLine)
-        div.setFixedHeight(1)
-        vl.addWidget(div)
-        binds_head = QLabel("Гарячі клавіші (бинди)")
-        binds_head.setObjectName("settingsSectionTitle")
-        vl.addWidget(binds_head)
-        vl.addWidget(self._build_binds_section())
+        binds = self._build_binds_section()
+        body = _ResponsiveSettingsBody(
+            c1,
+            c2,
+            c3,
+            c4,
+            binds,
+            breakpoint_w=SETTINGS_GRID_BREAKPOINT_W,
+        )
+        body_wrap = QWidget()
+        body_wrap_lay = QHBoxLayout(body_wrap)
+        body_wrap_lay.setContentsMargins(0, 0, 0, 0)
+        body_wrap_lay.setSpacing(0)
+        body_wrap_lay.addStretch(1)
+        body_wrap_lay.addWidget(body)
+        body_wrap_lay.addStretch(1)
+        vl.addWidget(body_wrap)
+
         scroll.setWidget(inner)
         outer_lay.addWidget(scroll)
         return outer
@@ -1824,6 +1958,12 @@ class MainWindow(QMainWindow):
         self._settings.log_level = LogLevel(self._set_log_level.currentText())
         self._settings.log_to_file = self._set_log_file.isChecked()
         self._settings.jitter_percent = float(self._set_jitter.value())
+        bind_cfg = self._read_binds_from_ui()
+        bind_errs = validate_bindings(bind_cfg)
+        if bind_errs:
+            QMessageBox.warning(self, "Бинди", "\n".join(bind_errs))
+            return
+        self._settings.bindings = bind_cfg
         save_settings(self._settings)
         self._presenter.notify_settings_saved()
         self._apply_theme()
@@ -1841,6 +1981,7 @@ class MainWindow(QMainWindow):
             self._tray.hide()
         self._overlay.set_opacity(self._settings.overlay_opacity)
         self._apply_hotkeys()
+        self._update_ac_button_hotkey_labels()
         logging.getLogger(__name__).info("Налаштування збережено")
 
     def _build_kb_tab(self) -> QWidget:

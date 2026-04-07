@@ -79,7 +79,7 @@ def _qcheckbox_stylesheet(theme: ThemeMode) -> str:
             image: url("{cd}");
         }}
         QCheckBox:disabled {{ color: {td}; }}
-        QWidget#settingsTabRoot QCheckBox {{ spacing: 6px; }}
+        QWidget#settingsTabRoot QCheckBox {{ spacing: 3px; }}
         """
     tp, td = T.L_TEXT_PRIMARY, T.L_TEXT_DISABLED
     b, surf = T.L_BORDER_SUBTLE, T.L_BG_SURFACE
@@ -123,7 +123,7 @@ def _qcheckbox_stylesheet(theme: ThemeMode) -> str:
             image: url("{cd}");
         }}
         QCheckBox:disabled {{ color: {td}; }}
-        QWidget#settingsTabRoot QCheckBox {{ spacing: 6px; }}
+        QWidget#settingsTabRoot QCheckBox {{ spacing: 3px; }}
         """
 
 
@@ -196,6 +196,25 @@ def stylesheet_for(theme: ThemeMode) -> str:
             font-weight: 500;
             border-radius: 8px;
             icon-size: 16px;
+        }}
+        QPushButton#headerPrimaryButton {{
+            padding: 4px 10px 5px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            border-radius: 8px;
+            icon-size: 16px;
+            background: {ac};
+            color: #F8FAFC;
+            border: 1px solid {ac};
+        }}
+        QPushButton#headerPrimaryButton:hover {{
+            background: {ach};
+            border-color: {ach};
+            color: #F8FAFC;
+        }}
+        QPushButton#headerPrimaryButton:pressed {{
+            background: {aca};
+            border-color: {aca};
         }}
         QPushButton#acStart, QPushButton#acPause, QPushButton#acStop {{
             padding: 4px 8px 5px 6px;
@@ -346,11 +365,54 @@ def stylesheet_for(theme: ThemeMode) -> str:
         QWidget#contentArea {{ background: {bg}; }}
         QScrollArea {{ border: none; background: transparent; }}
         QScrollArea > QWidget > QWidget {{ background: transparent; }}
-        QFrame#settingsSectionDivider {{
+        QFrame#settingsCard {{
+            background: rgba(30, 41, 59, 0.42);
+            border: 1px solid rgba(51, 65, 85, 0.55);
+            border-radius: 6px;
+        }}
+        QLabel#settingsCardTitle {{
+            color: {ts};
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.07em;
+            text-transform: uppercase;
+            margin: 0 0 2px 0;
+            padding: 0;
+            background: transparent;
             border: none;
-            background: {b};
-            max-height: 1px;
-            min-height: 1px;
+        }}
+        QLabel#settingsFormLabel {{
+            color: {ts};
+            font-size: 11px;
+            font-weight: 500;
+            margin: 0;
+            padding: 0px 6px 0px 0;
+            background: transparent;
+            border: none;
+        }}
+        QFrame#bindHotkeyRow {{
+            background: transparent;
+            border: none;
+            border-radius: 5px;
+            padding: 2px 4px;
+        }}
+        QFrame#bindHotkeyRow:hover {{
+            background: rgba(148, 163, 184, 0.1);
+        }}
+        QLabel#bindHotkeyActionLabel {{
+            color: {ts};
+            font-size: 11px;
+            font-weight: 500;
+            background: transparent;
+            border: none;
+        }}
+        QPushButton#bindHotkeyRowButton {{
+            min-height: 30px;
+            max-height: 32px;
+            padding: 3px 8px;
+            font-size: 11px;
+            font-weight: 500;
+            border-radius: 5px;
         }}
         QFrame#contentCard {{
             background: {surf};
@@ -443,16 +505,17 @@ def stylesheet_for(theme: ThemeMode) -> str:
             border-left: 1px solid {b};
             border-top-right-radius: 7px;
             background: #111827;
+            image: url("{spin_u_d}");
         }}
         QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover {{
             background: #334155;
         }}
         QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{
-            image: url({spin_u_d});
+            image: url("{spin_u_d}");
             width: 12px;
             height: 8px;
             margin-right: 8px;
-            margin-bottom: 2px;
+            margin-bottom: 1px;
         }}
         QSpinBox::down-button, QDoubleSpinBox::down-button {{
             subcontrol-origin: border;
@@ -461,16 +524,17 @@ def stylesheet_for(theme: ThemeMode) -> str:
             border-left: 1px solid {b};
             border-bottom-right-radius: 7px;
             background: #111827;
+            image: url("{spin_d_d}");
         }}
         QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {{
             background: #334155;
         }}
         QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{
-            image: url({spin_d_d});
+            image: url("{spin_d_d}");
             width: 12px;
             height: 8px;
             margin-right: 8px;
-            margin-top: 2px;
+            margin-top: 1px;
         }}
         QComboBox {{
             padding: 5px 8px;
@@ -488,12 +552,13 @@ def stylesheet_for(theme: ThemeMode) -> str:
             border-top-right-radius: 7px;
             border-bottom-right-radius: 7px;
             background: #111827;
+            image: url("{spin_d_d}");
         }}
         QComboBox::drop-down:hover {{
             background: #334155;
         }}
         QComboBox::down-arrow {{
-            image: url({spin_d_d});
+            image: url("{spin_d_d}");
             width: 12px;
             height: 8px;
             margin-right: 10px;
@@ -613,39 +678,88 @@ def stylesheet_for(theme: ThemeMode) -> str:
         QWidget#settingsTabRoot QSpinBox,
         QWidget#settingsTabRoot QDoubleSpinBox,
         QWidget#settingsTabRoot QComboBox {{
-            min-height: 24px;
-            border-radius: 6px;
+            min-height: 30px;
+            max-height: 32px;
+            border-radius: 5px;
         }}
         QWidget#settingsTabRoot QLineEdit {{
-            padding: 0 4px;
+            padding: 2px 6px;
         }}
         QWidget#settingsTabRoot QSpinBox,
         QWidget#settingsTabRoot QDoubleSpinBox {{
-            padding: 4px 8px;
-            padding-right: 26px;
+            padding: 2px 6px;
+            padding-right: 28px;
         }}
         QWidget#settingsTabRoot QComboBox {{
-            padding: 4px 8px;
-            padding-right: 26px;
+            padding: 2px 6px;
+            padding-right: 28px;
         }}
         QWidget#settingsTabRoot QComboBox::drop-down {{
+            subcontrol-origin: padding;
+            subcontrol-position: top right;
             width: 26px;
+            border-left: 1px solid {b};
+            border-top-right-radius: 5px;
+            border-bottom-right-radius: 5px;
+            background: #111827;
+            image: url("{spin_d_d}");
+        }}
+        QWidget#settingsTabRoot QComboBox::drop-down:hover {{
+            background: #334155;
+        }}
+        QWidget#settingsTabRoot QComboBox::down-arrow {{
+            image: url("{spin_d_d}");
+            width: 12px;
+            height: 8px;
+            margin-right: 6px;
         }}
         QWidget#settingsTabRoot QSpinBox::up-button, QWidget#settingsTabRoot QDoubleSpinBox::up-button {{
+            subcontrol-origin: border;
+            subcontrol-position: top right;
             width: 22px;
+            border-left: 1px solid {b};
+            border-top-right-radius: 5px;
+            background: #111827;
+            image: url("{spin_u_d}");
+        }}
+        QWidget#settingsTabRoot QSpinBox::up-button:hover, QWidget#settingsTabRoot QDoubleSpinBox::up-button:hover {{
+            background: #334155;
         }}
         QWidget#settingsTabRoot QSpinBox::down-button, QWidget#settingsTabRoot QDoubleSpinBox::down-button {{
+            subcontrol-origin: border;
+            subcontrol-position: bottom right;
             width: 22px;
+            border-left: 1px solid {b};
+            border-bottom-right-radius: 5px;
+            background: #111827;
+            image: url("{spin_d_d}");
+        }}
+        QWidget#settingsTabRoot QSpinBox::down-button:hover, QWidget#settingsTabRoot QDoubleSpinBox::down-button:hover {{
+            background: #334155;
+        }}
+        QWidget#settingsTabRoot QSpinBox::up-arrow, QWidget#settingsTabRoot QDoubleSpinBox::up-arrow {{
+            image: url("{spin_u_d}");
+            width: 12px;
+            height: 8px;
+            margin-right: 5px;
+            margin-bottom: 1px;
+        }}
+        QWidget#settingsTabRoot QSpinBox::down-arrow, QWidget#settingsTabRoot QDoubleSpinBox::down-arrow {{
+            image: url("{spin_d_d}");
+            width: 12px;
+            height: 8px;
+            margin-right: 5px;
+            margin-top: 1px;
         }}
         QWidget#settingsTabRoot QPushButton {{
-            padding: 5px 10px;
+            padding: 3px 8px;
             margin: 0px;
             min-height: 16px;
-            border-radius: 6px;
+            border-radius: 5px;
         }}
         QWidget#settingsTabRoot QLabel#formInlineLabel {{
             font-size: 11px;
-            padding: 0px 4px 0px 0px;
+            padding: 0px 2px 0px 0px;
         }}
         """
     # Light
@@ -660,6 +774,7 @@ def stylesheet_for(theme: ThemeMode) -> str:
     td = T.L_TEXT_DISABLED
     ac = T.L_ACCENT
     ach = T.L_ACCENT_HOVER
+    aca = T.L_ACCENT_ACTIVE
     err = T.D_STATE_ERROR
     ok = T.D_STATE_SUCCESS
     warn = T.D_STATE_WARNING
@@ -700,6 +815,25 @@ def stylesheet_for(theme: ThemeMode) -> str:
             font-weight: 500;
             border-radius: 8px;
             icon-size: 16px;
+        }}
+        QPushButton#headerPrimaryButton {{
+            padding: 4px 10px 5px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            border-radius: 8px;
+            icon-size: 16px;
+            background: {ac};
+            color: #F8FAFC;
+            border: 1px solid {ac};
+        }}
+        QPushButton#headerPrimaryButton:hover {{
+            background: {ach};
+            border-color: {ach};
+            color: #F8FAFC;
+        }}
+        QPushButton#headerPrimaryButton:pressed {{
+            background: {aca};
+            border-color: {aca};
         }}
         QPushButton#acStart, QPushButton#acPause, QPushButton#acStop {{
             padding: 4px 8px 5px 6px;
@@ -848,11 +982,54 @@ def stylesheet_for(theme: ThemeMode) -> str:
         }}
         QWidget#contentArea {{ background: {bg}; }}
         QScrollArea {{ border: none; background: transparent; }}
-        QFrame#settingsSectionDivider {{
+        QFrame#settingsCard {{
+            background: rgba(255, 255, 255, 0.58);
+            border: 1px solid rgba(226, 232, 240, 0.85);
+            border-radius: 6px;
+        }}
+        QLabel#settingsCardTitle {{
+            color: {ts};
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.07em;
+            text-transform: uppercase;
+            margin: 0 0 2px 0;
+            padding: 0;
+            background: transparent;
             border: none;
-            background: {b};
-            max-height: 1px;
-            min-height: 1px;
+        }}
+        QLabel#settingsFormLabel {{
+            color: {ts};
+            font-size: 11px;
+            font-weight: 500;
+            margin: 0;
+            padding: 0px 6px 0px 0;
+            background: transparent;
+            border: none;
+        }}
+        QFrame#bindHotkeyRow {{
+            background: transparent;
+            border: none;
+            border-radius: 5px;
+            padding: 2px 4px;
+        }}
+        QFrame#bindHotkeyRow:hover {{
+            background: rgba(15, 23, 42, 0.05);
+        }}
+        QLabel#bindHotkeyActionLabel {{
+            color: {ts};
+            font-size: 11px;
+            font-weight: 500;
+            background: transparent;
+            border: none;
+        }}
+        QPushButton#bindHotkeyRowButton {{
+            min-height: 30px;
+            max-height: 32px;
+            padding: 3px 8px;
+            font-size: 11px;
+            font-weight: 500;
+            border-radius: 5px;
         }}
         QFrame#contentCard {{
             background: {surf};
@@ -945,16 +1122,17 @@ def stylesheet_for(theme: ThemeMode) -> str:
             border-left: 1px solid {b};
             border-top-right-radius: 7px;
             background: {surf2};
+            image: url("{spin_u_l}");
         }}
         QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover {{
             background: #E2E8F0;
         }}
         QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{
-            image: url({spin_u_l});
+            image: url("{spin_u_l}");
             width: 12px;
             height: 8px;
             margin-right: 8px;
-            margin-bottom: 2px;
+            margin-bottom: 1px;
         }}
         QSpinBox::down-button, QDoubleSpinBox::down-button {{
             subcontrol-origin: border;
@@ -963,16 +1141,17 @@ def stylesheet_for(theme: ThemeMode) -> str:
             border-left: 1px solid {b};
             border-bottom-right-radius: 7px;
             background: {surf2};
+            image: url("{spin_d_l}");
         }}
         QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {{
             background: #E2E8F0;
         }}
         QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{
-            image: url({spin_d_l});
+            image: url("{spin_d_l}");
             width: 12px;
             height: 8px;
             margin-right: 8px;
-            margin-top: 2px;
+            margin-top: 1px;
         }}
         QComboBox {{
             padding: 5px 8px;
@@ -990,12 +1169,13 @@ def stylesheet_for(theme: ThemeMode) -> str:
             border-top-right-radius: 7px;
             border-bottom-right-radius: 7px;
             background: {surf2};
+            image: url("{spin_d_l}");
         }}
         QComboBox::drop-down:hover {{
             background: #E2E8F0;
         }}
         QComboBox::down-arrow {{
-            image: url({spin_d_l});
+            image: url("{spin_d_l}");
             width: 12px;
             height: 8px;
             margin-right: 10px;
@@ -1115,39 +1295,88 @@ def stylesheet_for(theme: ThemeMode) -> str:
         QWidget#settingsTabRoot QSpinBox,
         QWidget#settingsTabRoot QDoubleSpinBox,
         QWidget#settingsTabRoot QComboBox {{
-            min-height: 24px;
-            border-radius: 6px;
+            min-height: 30px;
+            max-height: 32px;
+            border-radius: 5px;
         }}
         QWidget#settingsTabRoot QLineEdit {{
-            padding: 0 4px;
+            padding: 2px 6px;
         }}
         QWidget#settingsTabRoot QSpinBox,
         QWidget#settingsTabRoot QDoubleSpinBox {{
-            padding: 4px 8px;
-            padding-right: 26px;
+            padding: 2px 6px;
+            padding-right: 28px;
         }}
         QWidget#settingsTabRoot QComboBox {{
-            padding: 4px 8px;
-            padding-right: 26px;
+            padding: 2px 6px;
+            padding-right: 28px;
         }}
         QWidget#settingsTabRoot QComboBox::drop-down {{
+            subcontrol-origin: padding;
+            subcontrol-position: top right;
             width: 26px;
+            border-left: 1px solid {b};
+            border-top-right-radius: 5px;
+            border-bottom-right-radius: 5px;
+            background: {surf2};
+            image: url("{spin_d_l}");
+        }}
+        QWidget#settingsTabRoot QComboBox::drop-down:hover {{
+            background: #E2E8F0;
+        }}
+        QWidget#settingsTabRoot QComboBox::down-arrow {{
+            image: url("{spin_d_l}");
+            width: 12px;
+            height: 8px;
+            margin-right: 6px;
         }}
         QWidget#settingsTabRoot QSpinBox::up-button, QWidget#settingsTabRoot QDoubleSpinBox::up-button {{
+            subcontrol-origin: border;
+            subcontrol-position: top right;
             width: 22px;
+            border-left: 1px solid {b};
+            border-top-right-radius: 5px;
+            background: {surf2};
+            image: url("{spin_u_l}");
+        }}
+        QWidget#settingsTabRoot QSpinBox::up-button:hover, QWidget#settingsTabRoot QDoubleSpinBox::up-button:hover {{
+            background: #E2E8F0;
         }}
         QWidget#settingsTabRoot QSpinBox::down-button, QWidget#settingsTabRoot QDoubleSpinBox::down-button {{
+            subcontrol-origin: border;
+            subcontrol-position: bottom right;
             width: 22px;
+            border-left: 1px solid {b};
+            border-bottom-right-radius: 5px;
+            background: {surf2};
+            image: url("{spin_d_l}");
+        }}
+        QWidget#settingsTabRoot QSpinBox::down-button:hover, QWidget#settingsTabRoot QDoubleSpinBox::down-button:hover {{
+            background: #E2E8F0;
+        }}
+        QWidget#settingsTabRoot QSpinBox::up-arrow, QWidget#settingsTabRoot QDoubleSpinBox::up-arrow {{
+            image: url("{spin_u_l}");
+            width: 12px;
+            height: 8px;
+            margin-right: 5px;
+            margin-bottom: 1px;
+        }}
+        QWidget#settingsTabRoot QSpinBox::down-arrow, QWidget#settingsTabRoot QDoubleSpinBox::down-arrow {{
+            image: url("{spin_d_l}");
+            width: 12px;
+            height: 8px;
+            margin-right: 5px;
+            margin-top: 1px;
         }}
         QWidget#settingsTabRoot QPushButton {{
-            padding: 5px 10px;
+            padding: 3px 8px;
             margin: 0px;
             min-height: 16px;
-            border-radius: 6px;
+            border-radius: 5px;
         }}
         QWidget#settingsTabRoot QLabel#formInlineLabel {{
             font-size: 11px;
-            padding: 0px 4px 0px 0px;
+            padding: 0px 2px 0px 0px;
         }}
         """
 

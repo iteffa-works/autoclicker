@@ -20,6 +20,13 @@ CONTENT_PADDING = 16
 FORM_LABEL_MIN_W = 140
 FORM_FIELD_MAX_W = 280
 FORM_COMBO_MAX_W = 360
+# Вкладка «Налаштування»: inline label + поле (IDE-style)
+SETTINGS_INLINE_LABEL_W = 170
+# Центруємо dense-grid, щоб секції не розтягувались на всю ширину вікна.
+SETTINGS_CONTENT_MAX_W = 1320
+# Нижче цієї ширини сітка налаштувань переходить на 1 колонку
+SETTINGS_GRID_BREAKPOINT_W = 920
+SETTINGS_NUM_FIELD_MAX_W = 112
 # Вузькі колонки на вкладці «Автоклікер» (сітка 2–3 колонки)
 AC_COL_FIELD_MAX_W = 220
 AC_COL_COMBO_MAX_W = 260

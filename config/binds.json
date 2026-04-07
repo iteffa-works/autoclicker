@@ -1,12 +1,6 @@
 {
-  "toggle_autoclick": {
-    "modifiers": [],
-    "key": "f6"
-  },
-  "pause_autoclick": {
-    "modifiers": [],
-    "key": "f8"
-  },
+  "toggle_autoclick": null,
+  "pause_autoclick": null,
   "toggle_macro_play": null,
   "toggle_record_macro": null,
   "toggle_tray": null,
